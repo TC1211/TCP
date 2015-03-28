@@ -911,133 +911,133 @@ usage (void)
 int
 main (int argc, char **argv)
 {
-  struct option o[] = {
-    { "debug", no_argument, NULL, 'd' },
-    { "unix", no_argument, NULL, 'u' },
-    { "server", no_argument, NULL, 's' },
-    { "window", required_argument, NULL, 'w' },
-    { "client", no_argument, NULL, 'c' },
-    { NULL, 0, NULL, 0 }
-  };
-  int opt;
-  int opt_unix = 0;
-  int opt_client = 0;
-  int opt_server = 0;
-  char *local = NULL;
-  char *remote = NULL;
-  struct config_common c;
-  struct sockaddr_storage ss;
-  struct sigaction sa;
+	struct option o[] = {
+			{ "debug", no_argument, NULL, 'd' },
+			{ "unix", no_argument, NULL, 'u' },
+			{ "server", no_argument, NULL, 's' },
+			{ "window", required_argument, NULL, 'w' },
+			{ "client", no_argument, NULL, 'c' },
+			{ NULL, 0, NULL, 0 }
+	};
+	int opt;
+	int opt_unix = 0;
+	int opt_client = 0;
+	int opt_server = 0;
+	char *local = NULL;
+	char *remote = NULL;
+	struct config_common c;
+	struct sockaddr_storage ss;
+	struct sigaction sa;
 
-  /* Ignore SIGPIPE, since we may get a lot of these */
-  memset (&sa, 0, sizeof (sa));
-  sa.sa_handler = SIG_IGN;
-  sigaction (SIGPIPE, &sa, NULL);
+	/* Ignore SIGPIPE, since we may get a lot of these */
+	memset (&sa, 0, sizeof (sa));
+	sa.sa_handler = SIG_IGN;
+	sigaction (SIGPIPE, &sa, NULL);
 
-  memset (&c, 0, sizeof (c));
-  c.window = 1;
-  c.timeout = 2000;
+	memset (&c, 0, sizeof (c));
+	c.window = 1;
+	c.timeout = 2000;
 
-  progname = strrchr (argv[0], '/');
-  if (progname)
-    progname++;
-  else
-    progname = argv[0];
+	progname = strrchr (argv[0], '/');
+	if (progname)
+		progname++;
+	else
+		progname = argv[0];
 
-  while ((opt = getopt_long (argc, argv, "cdust:w:l", o, NULL)) != -1)
-    switch (opt) {
-    case 'c':
-      opt_client = 1;
-      break;
-    case 'd':
-      opt_debug = 1;
-      break;
-    case 'l':
-      {
-	char name[40];
-	snprintf (name, sizeof (name), "%d.in.log", (int) getpid ());
-	log_in = open (name, O_CREAT|O_TRUNC|O_WRONLY, 0666);
-	if (log_in < 0)
-	  perror (name);
-	snprintf (name, sizeof (name), "%d.out.log", (int) getpid ());
-	log_out = open (name, O_CREAT|O_TRUNC|O_WRONLY, 0666);
-	if (log_out < 0)
-	  perror (name);
-      }
-      break;
-    case 'u':
-      opt_unix = 1;
-      break;
-    case 's':
-      opt_server = 1;
-      break;
-    case 'w':
-      c.window = atoi (optarg);
-      break;
-    case 't':
-      c.timeout = atoi (optarg);
-      break;
-    default:
-      usage ();
-      break;
-    }
+	while ((opt = getopt_long (argc, argv, "cdust:w:l", o, NULL)) != -1)
+		switch (opt) {
+		case 'c':
+			opt_client = 1;
+			break;
+		case 'd':
+			opt_debug = 1;
+			break;
+		case 'l':
+		{
+			char name[40];
+			snprintf (name, sizeof (name), "%d.in.log", (int) getpid ());
+			log_in = open (name, O_CREAT|O_TRUNC|O_WRONLY, 0666);
+			if (log_in < 0)
+				perror (name);
+			snprintf (name, sizeof (name), "%d.out.log", (int) getpid ());
+			log_out = open (name, O_CREAT|O_TRUNC|O_WRONLY, 0666);
+			if (log_out < 0)
+				perror (name);
+		}
+		break;
+		case 'u':
+			opt_unix = 1;
+			break;
+		case 's':
+			opt_server = 1;
+			break;
+		case 'w':
+			c.window = atoi (optarg);
+			break;
+		case 't':
+			c.timeout = atoi (optarg);
+			break;
+		default:
+			usage ();
+			break;
+		}
 
-  if (optind + 2 != argc || c.window < 1 || c.timeout < 10
-      || (opt_server && opt_client)
-      || (!(opt_server || opt_client) && opt_unix))
-    usage ();
-  c.timer = c.timeout / 5;
-  local = argv[optind];
-  remote = argv[optind+1];
+	if (optind + 2 != argc || c.window < 1 || c.timeout < 10
+			|| (opt_server && opt_client)
+			|| (!(opt_server || opt_client) && opt_unix))
+		usage ();
+	c.timer = c.timeout / 5;
+	local = argv[optind];
+	remote = argv[optind+1];
 
-  // if -s option supplied
-  if (opt_server) {
-    struct config_server cs;
-    cs.c = c;
-    if (get_address (&cs.dest, 0, 0, opt_unix ? AF_UNIX : AF_INET, remote) < 0
-	|| get_address (&ss, 1, 1, AF_INET, local) < 0
-	|| (cs.udp_socket = listen_on (1, &ss)) < 0)
-      exit (1);
-    do_server (&cs);
-  }
-  // if -c option supplied
-  else if (opt_client) {
-    struct config_client cc;
-    struct sockaddr_storage ss;
-    cc.c = c;
-    if (get_address (&cc.server, 0, 1, AF_INET, remote) < 0
-	|| get_address (&ss, 1, 0, opt_unix ? AF_UNIX : AF_INET, local) < 0
-	|| (cc.listen_socket = listen_on (0, &ss)) < 0)
-      exit (1);
-    do_client (&cc);
-  }
-  // default behavior
-  else {
-    struct sockaddr_storage sl, sr;
-    conn_t *cn = conn_alloc ();
-    c.single_connection = 1;
-    cn->rfd = 0;
-    cn->wfd = 1;
-    if (get_address (&sr, 0, 1, AF_INET, remote) < 0
-	|| get_address (&sl, 1, 1, sr.ss_family, local) < 0
-	|| (cn->nfd = listen_on (1, &sl)) < 0)
-      exit (1);
-    if (connect (cn->nfd, (struct sockaddr *) &sr, addrsize (&sr)) < 0) {
-      perror ("connect");
-      exit (1);
-    }
-    cn->server = 0;
-    cn->peer = sr;
-    make_async (cn->rfd);
-    make_async (cn->wfd);
-    make_async (cn->nfd);
-    cn->rel = rel_create (cn, NULL, &c);
+	// if -s option supplied
+	if (opt_server) {
+		struct config_server cs;
+		cs.c = c;
+		if (get_address (&cs.dest, 0, 0, opt_unix ? AF_UNIX : AF_INET, remote) < 0
+				|| get_address (&ss, 1, 1, AF_INET, local) < 0
+				|| (cs.udp_socket = listen_on (1, &ss)) < 0)
+			exit (1);
+		do_server (&cs);
+	}
+	// if -c option supplied
+	else if (opt_client) {
+		struct config_client cc;
+		struct sockaddr_storage ss;
+		cc.c = c;
+		if (get_address (&cc.server, 0, 1, AF_INET, remote) < 0
+				|| get_address (&ss, 1, 0, opt_unix ? AF_UNIX : AF_INET, local) < 0
+				|| (cc.listen_socket = listen_on (0, &ss)) < 0)
+			exit (1);
+		do_client (&cc);
+	}
+	// default behavior
+	else {
+		struct sockaddr_storage sl, sr;
+		conn_t *cn = conn_alloc ();
+		c.single_connection = 1;
+		cn->rfd = 0;
+		cn->wfd = 1;
+		if (get_address (&sr, 0, 1, AF_INET, remote) < 0
+				|| get_address (&sl, 1, 1, sr.ss_family, local) < 0
+				|| (cn->nfd = listen_on (1, &sl)) < 0)
+			exit (1);
+		if (connect (cn->nfd, (struct sockaddr *) &sr, addrsize (&sr)) < 0) {
+			perror ("connect");
+			exit (1);
+		}
+		cn->server = 0;
+		cn->peer = sr;
+		make_async (cn->rfd);
+		make_async (cn->wfd);
+		make_async (cn->nfd);
+		cn->rel = rel_create (cn, NULL, &c);
 
-    conn_mkevents ();
-    while (conn_list)
-      // what we actually care about
-      conn_poll (&c);
-  }
+		conn_mkevents ();
+		while (conn_list)
+			// what we actually care about
+			conn_poll (&c);
+	}
 
-  return 0;
+	return 0;
 }

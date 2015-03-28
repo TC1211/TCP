@@ -24,28 +24,28 @@
 // rel_t and one conn_t instance.
 // rel_t also contains a linked list for traversing all connections
 struct reliable_state {
-  rel_t *next;			/* Linked list for traversing all connections */
-  rel_t **prev;
+	rel_t *next;			/* Linked list for traversing all connections */
+	rel_t **prev;
 
-  conn_t *c;			/* This is the connection object */
+	conn_t *c;			/* This is the connection object */
 
-  /* Add your own data fields below this */
+	/* Add your own data fields below this */
 
-  // send buffer
-  //   - last byte ACKed
-  //   - last byte sent
-  //   - last byte written
-  // receive buffer
-  //   - last byte read
-  //   - next byte expected
-  //   - last byte received
-  //
-  // config
-  //   - window size
-  //   - timer interval
-  //   - timeout inteval
-  //   - whether single connection or not (always true)
-  //
+	// send buffer
+	//   - last byte ACKed
+	//   - last byte sent
+	//   - last byte written
+	// receive buffer
+	//   - last byte read
+	//   - next byte expected
+	//   - last byte received
+	//
+	// config
+	//   - window size
+	//   - timer interval
+	//   - timeout inteval
+	//   - whether single connection or not (always true)
+	//
 };
 rel_t *rel_list;
 
@@ -64,43 +64,43 @@ rel_t *rel_list;
 // During runtime, if a new connection is created, then you have to deal with 1)
 rel_t *
 rel_create (conn_t *c, const struct sockaddr_storage *ss,
-	    const struct config_common *cc)
+		const struct config_common *cc)
 {
-  rel_t *r;
+	rel_t *r;
 
-  r = xmalloc (sizeof (*r));
-  memset (r, 0, sizeof (*r));
+	r = xmalloc (sizeof (*r));
+	memset (r, 0, sizeof (*r));
 
-  if (!c) {
-    c = conn_create (r, ss);
-    if (!c) {
-      free (r);
-      return NULL;
-    }
-  }
+	if (!c) {
+		c = conn_create (r, ss);
+		if (!c) {
+			free (r);
+			return NULL;
+		}
+	}
 
-  r->c = c;
-  r->next = rel_list;
-  r->prev = &rel_list;
-  if (rel_list)
-    rel_list->prev = &r->next;
-  rel_list = r;
+	r->c = c;
+	r->next = rel_list;
+	r->prev = &rel_list;
+	if (rel_list)
+		rel_list->prev = &r->next;
+	rel_list = r;
 
-  /* Do any other initialization you need here */
+	/* Do any other initialization you need here */
 
 
-  return r;
+	return r;
 }
 
 void
 rel_destroy (rel_t *r)
 {
-  if (r->next)
-    r->next->prev = r->prev;
-  *r->prev = r->next;
-  conn_destroy (r->c);
+	if (r->next)
+		r->next->prev = r->prev;
+	*r->prev = r->next;
+	conn_destroy (r->c);
 
-  /* Free any other allocated memory here */
+	/* Free any other allocated memory here */
 }
 
 
@@ -117,8 +117,8 @@ rel_destroy (rel_t *r)
 // if not, ???
 void
 rel_demux (const struct config_common *cc,
-	   const struct sockaddr_storage *ss,
-	   packet_t *pkt, size_t len)
+		const struct sockaddr_storage *ss,
+		packet_t *pkt, size_t len)
 {
 }
 
@@ -149,6 +149,6 @@ rel_output (rel_t *r)
 void
 rel_timer ()
 {
-  /* Retransmit any packets that need to be retransmitted */
+	/* Retransmit any packets that need to be retransmitted */
 
 }
