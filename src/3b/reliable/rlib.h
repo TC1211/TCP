@@ -67,19 +67,19 @@
 
 /* Ack-only packets are only 12 bytes */
 struct ack_packet {
-  uint16_t cksum;
-  uint16_t len;
-  uint32_t ackno;
-  uint32_t rwnd;
+	uint16_t cksum;
+	uint16_t len;
+	uint32_t ackno;
+	uint32_t rwnd;
 };
 
 struct packet {
-  uint16_t cksum;
-  uint16_t len;
-  uint32_t ackno;
-  uint32_t rwnd;
-  uint32_t seqno;		/* Only valid if length > 8 */
-  char data[1000];
+	uint16_t cksum;
+	uint16_t len;
+	uint32_t ackno;
+	uint32_t rwnd;
+	uint32_t seqno;		/* Only valid if length > 8 */
+	char data[1000];
 };
 typedef struct packet packet_t;
 
@@ -87,7 +87,7 @@ typedef struct packet packet_t;
 
    Important notes about the library:
 
-   * A connection is named by the tuple:
+ * A connection is named by the tuple:
 
      <local-IP-address, local-UDP-port, remote-IP-address, remote-UDP-port>
 
@@ -97,7 +97,7 @@ typedef struct packet packet_t;
      for this is addreq(), which compares two sockaddr_storage
      structures and tells you if they are the same.
 
-   * The configuration of the program is described by a structure
+ * The configuration of the program is described by a structure
      config_common that gets passed to various functions.  The most
      important fields are:
 
@@ -112,7 +112,7 @@ typedef struct packet packet_t;
                   CLOCK_MONOTONIC useful for keeping track of when
                   packets are sent.  Run "man clock_gettime".
 
-   * Your task is to implement the following seven functions:
+ * Your task is to implement the following seven functions:
 
        rel_create, rel_destroy, rel_recvpkt, rel_demux,
        rel_read, rel_output, rel_timer
@@ -120,13 +120,13 @@ typedef struct packet packet_t;
      as well to augment the reliable_state data structure.  All the
      changes you need to make are in the file reliable.c.
 
-   * The reliable_state structure encapsulates the state of each
+ * The reliable_state structure encapsulates the state of each
      connection.  The structure is typedefed to rel_t in this file,
      but the contents of the reliable_state structure is defined in
      reliable.c, where you should add more fields as needed to keep
      your per-connection state.
 
-   * A rel_t is created by the rel_create function.  When running in
+ * A rel_t is created by the rel_create function.  When running in
      single-connection or client mode, the library will call
      rel_create directly for you.  When running as a server, you will
      need to invoke rel_create yourself from within rel_demux when you
@@ -134,7 +134,7 @@ typedef struct packet packet_t;
      sequence number 1 from a sockaddr_storage that you have not seen
      before (which you can test for using addreq()).
 
-   * A rel_t is deallocated by rel_destroy().  The library will call
+ * A rel_t is deallocated by rel_destroy().  The library will call
      rel_destroy when it receives an ICMP port unreachable (signifying
      that the other end of the connection has died).  You should also
      call rel_destroy when all of the following hold:
@@ -151,7 +151,7 @@ typedef struct packet packet_t;
      around in case the last ack it sent got lost, the way TCP uses
      the FIN_WAIT state, but this is not required.
 
-   * When a packet is received, the library will call either
+ * When a packet is received, the library will call either
      rel_recvpkt or rel_demux.  rel_recvpkt is called when running in
      single-connection or client mode.  In that case, the library
      already knows what rel_t to use for the particular UDP port
@@ -159,12 +159,12 @@ typedef struct packet packet_t;
      case of the server, all UDP packets go to the same port, so you
      must demultiplex the connections in rel_demux.
 
-   * To get the input data that you must send in your packets, call
+ * To get the input data that you must send in your packets, call
      conn_input.  If no data is available, conn_input will return 0.
      At that point, the library will call rel_read once data is again
      available to from conn_input.
 
-   * To output data you have received in decoded UDP packets, call
+ * To output data you have received in decoded UDP packets, call
      conn_output.  The function conn_bufspace tells you how much space
      is available.  If you try to write more than this, conn_output
      may return that it has accepted fewer bytes than you have asked
@@ -174,21 +174,21 @@ typedef struct packet packet_t;
      point you can send out more Acks to get more data from the remote
      side.
 
-   * The function rel_timer is called periodically, currently at a
+ * The function rel_timer is called periodically, currently at a
      rate 1/5 of the retransmission interval.  You can use this timer
      to inspect packets and retransmit packets that have not been
      acknowledged.  Do not retransmit every packet every time the
      timer is fired!  You must keep track of which packets need to be
      retransmitted when.
 
-*/
+ */
 
 struct config_common {
-  int window;			/* # of unacknowledged packets in flight */
-  int timer;			/* How often rel_timer called in milliseconds */
-  int timeout;			/* Retransmission timeout in milliseconds */
-  int single_connection;        /* Exit after first connection failure */
-  int sender_receiver;          /* sender or receiver*/
+	int window;			/* # of unacknowledged packets in flight */
+	int timer;			/* How often rel_timer called in milliseconds */
+	int timeout;			/* Retransmission timeout in milliseconds */
+	int single_connection;        /* Exit after first connection failure */
+	int sender_receiver;          /* sender or receiver*/
 };
 
 typedef struct reliable_state rel_t;
@@ -223,38 +223,38 @@ void print_pkt (const packet_t *buf, const char *op, int n);
  * pointers to it.  */
 
 struct chunk {
-  struct chunk *next;
-  size_t size;
-  size_t used;
-  char buf[1];
+	struct chunk *next;
+	size_t size;
+	size_t used;
+	char buf[1];
 };
 typedef struct chunk chunk_t;
 
 
 struct conn {
-  rel_t *rel;			/* Data from reliable */
+	rel_t *rel;			/* Data from reliable */
 
-  int rpoll;			/* offsets into cevents array */
-  int wpoll;
-  int npoll;
+	int rpoll;			/* offsets into cevents array */
+	int wpoll;
+	int npoll;
 
-  int rfd;			/* input file descriptor */
-  int wfd;			/* output file descriptor */
-  int nfd;			/* network file descriptor */
-  char server;			/* non-zero on server */
-  int sender_receiver;          /* sender = 1, receiver = 2*/
-  struct sockaddr_storage peer;	/* network peer */
+	int rfd;			/* input file descriptor */
+	int wfd;			/* output file descriptor */
+	int nfd;			/* network file descriptor */
+	char server;			/* non-zero on server */
+	int sender_receiver;          /* sender = 1, receiver = 2*/
+	struct sockaddr_storage peer;	/* network peer */
 
-  char read_eof;	        /* zero if haven't received EOF */
-  char write_eof;		/* send EOF when output queue drained */
-  char write_err;	        /* zero if it's okay to write to wfd */
-  char xoff;			/* non-zero to pause reading */
-  char delete_me;		/* delete after draining */
-  chunk_t *outq;		/* chunks not yet written */
-  chunk_t **outqtail;
+	char read_eof;	        /* zero if haven't received EOF */
+	char write_eof;		/* send EOF when output queue drained */
+	char write_err;	        /* zero if it's okay to write to wfd */
+	char xoff;			/* non-zero to pause reading */
+	char delete_me;		/* delete after draining */
+	chunk_t *outq;		/* chunks not yet written */
+	chunk_t **outqtail;
 
-  struct conn *next;		/* Linked list of connections */
-  struct conn **prev;
+	struct conn *next;		/* Linked list of connections */
+	struct conn **prev;
 };
 typedef struct conn conn_t;
 
@@ -295,7 +295,7 @@ void conn_destroy (conn_t *c);
 /* Functions you must provide (in reliable.c). */
 
 rel_t *rel_create (conn_t *, const struct sockaddr_storage *,
-		   const struct config_common *);
+		const struct config_common *);
 void rel_destroy (rel_t *);
 
 /* This function gets called on clients, when packets arrive: */
@@ -320,7 +320,7 @@ void rel_timer (void); /* Invoked roughly each timer/5 milliseconds */
  * non-zero, use unix-domain sockets.  name is either "port" or
  * "host:port". */
 int get_address (struct sockaddr_storage *ss, int local,
-		 int dgram, int unixdom, char *name);
+		int dgram, int unixdom, char *name);
 
 /* Put socket in non-blocking mode */
 int make_async (int s);
