@@ -16,7 +16,9 @@
 #include "rlib.h"
 
 
-
+// The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
+// rel_t and one conn_t instance.
+// rel_t also contains a linked list for traversing all connections
 struct reliable_state {
   rel_t *next;			/* Linked list for traversing all connections */
   rel_t **prev;
@@ -36,6 +38,11 @@ rel_t *rel_list;
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
  * from rlib.c, while c is NULL when this function is called from
  * rel_demux.) */
+// 1) if this is a new connection the conn_t is NULL
+// 2) if the connection has already been created,
+// then there is no need for the sockaddr_storage, so it will be NULL
+// During startup, an initial connection is created for you, leading to 2)
+// During runtime, if a new connection is created, then you have to deal with 1)
 rel_t *
 rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	    const struct config_common *cc)
@@ -86,6 +93,9 @@ rel_destroy (rel_t *r)
  * ().  (Pass rel_create NULL for the conn_t, so it will know to
  * allocate a new connection.)
  */
+// Note: This is only called in server mode, i.e. when you supply the -s option when running
+// This will add a new node to the linked list if this is a new connection
+// if not, ???
 void
 rel_demux (const struct config_common *cc,
 	   const struct sockaddr_storage *ss,
@@ -93,22 +103,30 @@ rel_demux (const struct config_common *cc,
 {
 }
 
+// For receiving packets; these are either ACKs (for sending) or data packets (for receiving)
+// For receiving: read in and buffer the packets so they can be consumed by by rel_output
+// For sending: update how many unACKed packets there are
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 }
 
-
+// read in data using conn_input, break this data into packets, send the packets,
+// and update how many unacked packets there are
 void
 rel_read (rel_t *s)
 {
 }
 
+// Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
+// you can flush, and flush using conn_output
+// Once flushed, send ACKs out, since there is now free buffer space
 void
 rel_output (rel_t *r)
 {
 }
 
+// Retransmit any unACKed packets after a certain amount of time
 void
 rel_timer ()
 {
