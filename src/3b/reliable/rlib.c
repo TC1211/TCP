@@ -490,6 +490,9 @@ conn_poll (const struct config_common *cc)
     n = poll (cevents, ncevents, need_timer_in (&last_timeout, cc->timer));
   else
     n = poll (cevents+1, ncevents-1, need_timer_in (&last_timeout, cc->timer));
+  if (n < 0) {
+    fprintf(stderr, "Poll error\n");
+  }
 
   for (i = 1; i < ncevents; i++) {
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {

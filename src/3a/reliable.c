@@ -15,10 +15,24 @@
 
 #include "rlib.h"
 
-
-// LATER:
+// TODO:
 //    - arbitrarily long receive / send buffer
 //    - multiple connections
+
+// Buffers are fixed at 10 megabytes for now
+#define DEFAULT_BUFFER_SIZE (10 * 1024 *1024)
+
+typedef struct {
+	void *last_byte_acked;
+	void *last_byte_sent;
+	void *last_byte_written;
+} send_buffer_metadata;
+
+typedef struct {
+	void *last_byte_read;
+	void *next_byte_expected;
+	void *last_byte_received;
+} receive_buffer_metadata;
 
 // The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
 // rel_t and one conn_t instance.
@@ -31,21 +45,21 @@ struct reliable_state {
 
 	/* Add your own data fields below this */
 
-	// send buffer
-	//   - last byte ACKed
-	//   - last byte sent
-	//   - last byte written
-	// receive buffer
-	//   - last byte read
-	//   - next byte expected
-	//   - last byte received
-	//
+	void *send_buffer;
+	size_t send_buffer_size;
+	send_buffer_metadata send_buffer_metadata;
+
+	void *receive_buffer;
+	size_t receive_buffer_size;
+	receive_buffer_metadata receive_buffer_metadata;
+
 	// config
 	//   - window size
 	//   - timer interval
-	//   - timeout inteval
-	//   - whether single connection or not (always true)
+	//   - timeout interval
+	//   - whether single connection or not
 	//
+	const struct config_common *config;
 };
 rel_t *rel_list;
 
@@ -88,6 +102,19 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
 	/* Do any other initialization you need here */
 
+	r->send_buffer = malloc(DEFAULT_BUFFER_SIZE);
+	r->send_buffer_size = DEFAULT_BUFFER_SIZE;
+	r->send_buffer_metadata.last_byte_acked = r->send_buffer;
+	r->send_buffer_metadata.last_byte_sent = r->send_buffer;
+	r->send_buffer_metadata.last_byte_written = r->send_buffer;
+
+	r->receive_buffer = malloc(DEFAULT_BUFFER_SIZE);
+	r->receive_buffer_size = DEFAULT_BUFFER_SIZE;
+	r->receive_buffer_metadata.last_byte_read = r->receive_buffer;
+	r->receive_buffer_metadata.next_byte_expected = r->receive_buffer;
+	r->receive_buffer_metadata.last_byte_received = r->receive_buffer;
+
+	r->config = cc;
 
 	return r;
 }
@@ -101,6 +128,9 @@ rel_destroy (rel_t *r)
 	conn_destroy (r->c);
 
 	/* Free any other allocated memory here */
+
+	free(r->send_buffer);
+	free(r->receive_buffer);
 }
 
 
