@@ -16,6 +16,10 @@
 #include "rlib.h"
 
 
+// LATER:
+//    - arbitrarily long receive / send buffer
+//    - multiple connections
+
 // The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
 // rel_t and one conn_t instance.
 // rel_t also contains a linked list for traversing all connections
@@ -27,6 +31,21 @@ struct reliable_state {
 
   /* Add your own data fields below this */
 
+  // send buffer
+  //   - last byte ACKed
+  //   - last byte sent
+  //   - last byte written
+  // receive buffer
+  //   - last byte read
+  //   - next byte expected
+  //   - last byte received
+  //
+  // config
+  //   - window size
+  //   - timer interval
+  //   - timeout inteval
+  //   - whether single connection or not (always true)
+  //
 };
 rel_t *rel_list;
 

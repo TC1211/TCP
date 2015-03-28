@@ -494,6 +494,7 @@ need_timer_in (const struct timespec *last, long timer)
     timer - to;
 }
 
+// main event-handling function which calls reliable.c functions
 void
 conn_poll (const struct config_common *cc)
 {
@@ -506,19 +507,23 @@ conn_poll (const struct config_common *cc)
     cevents_generation = last_cg;
   }
 
+  // get events
   if (cevents[0].fd >= 0)
     n = poll (cevents, ncevents, need_timer_in (&last_timeout, cc->timer));
   else
     n = poll (cevents+1, ncevents-1, need_timer_in (&last_timeout, cc->timer));
 
+  // iterate through events and handle each one
   for (i = 1; i < ncevents; i++) {
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {
       if ((c = evreaders[i]) && !c->delete_me) {
+    // read / send from the input file descriptor (rel_read)
 	if (cevents[i].fd == c->rfd) {
 	  c->xoff = 1;
 	  cevents[i].events &= ~POLLIN;
 	  rel_read (c->rel);
 	}
+	// terminate the connection (rel_destroy)
 	else if (cevents[i].fd == c->nfd
 		 && (cevents[i].revents & (POLLERR|POLLHUP))) {
 	  char addr[NI_MAXHOST] = "unknown";
@@ -532,6 +537,7 @@ conn_poll (const struct config_common *cc)
 	    exit (1);
 	  rel_destroy (c->rel);
 	}
+	// receive a packet (rel_recvpkt)
 	else if (cevents[i].fd == c->nfd && !c->server) {
 	  packet_t pkt;
 	  int len = debug_recv (c->nfd, &pkt, sizeof (pkt), 0, NULL);
@@ -546,6 +552,7 @@ conn_poll (const struct config_common *cc)
 	}
       }
     }
+    // output received data (rel_output via conn_drain)
     if ((cevents[i].revents & (POLLOUT|POLLHUP|POLLERR))
 	&& evwriters[i])
       conn_drain (evwriters[i]);
@@ -563,6 +570,7 @@ conn_poll (const struct config_common *cc)
     cevents[i].revents = 0;
   }
 
+  // run the timer (rel_timer)
   if (need_timer_in (&last_timeout, cc->timer) == 0) {
     rel_timer ();
     clock_gettime (CLOCK_MONOTONIC, &last_timeout);
@@ -982,6 +990,7 @@ main (int argc, char **argv)
   local = argv[optind];
   remote = argv[optind+1];
 
+  // if -s option supplied
   if (opt_server) {
     struct config_server cs;
     cs.c = c;
@@ -991,6 +1000,7 @@ main (int argc, char **argv)
       exit (1);
     do_server (&cs);
   }
+  // if -c option supplied
   else if (opt_client) {
     struct config_client cc;
     struct sockaddr_storage ss;
@@ -1001,6 +1011,7 @@ main (int argc, char **argv)
       exit (1);
     do_client (&cc);
   }
+  // default behavior
   else {
     struct sockaddr_storage sl, sr;
     conn_t *cn = conn_alloc ();
@@ -1024,6 +1035,7 @@ main (int argc, char **argv)
 
     conn_mkevents ();
     while (conn_list)
+      // what we actually care about
       conn_poll (&c);
   }
 
