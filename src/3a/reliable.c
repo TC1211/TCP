@@ -22,6 +22,19 @@
 // Buffers are fixed at 10 megabytes for now
 #define DEFAULT_BUFFER_SIZE (10 * 1024 *1024)
 
+//this struct will match a chunk of data with its corresponding packet sequence number
+typedef struct seqobj {
+	struct seqobj *next;
+	struct seqobj *prev;
+	int seqno;
+	char *data;
+} seq_obj;
+
+//seq_map should point to a linked list of seq_obj objects so that we can keep track of 
+//which data chunks came with which sequence number; 
+//should be useful for sending ACKs and retransmissions
+seq_obj *seq_map;
+
 typedef struct {
 	void *last_byte_acked;
 	void *last_byte_sent;
@@ -62,10 +75,6 @@ struct reliable_state {
 	const struct config_common *config;
 };
 rel_t *rel_list;
-
-
-
-
 
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
@@ -113,6 +122,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	r->receive_buffer_metadata.last_byte_read = r->receive_buffer;
 	r->receive_buffer_metadata.next_byte_expected = r->receive_buffer;
 	r->receive_buffer_metadata.last_byte_received = r->receive_buffer;
+
 
 	r->config = cc;
 
@@ -167,12 +177,42 @@ rel_read (rel_t *s)
 {
 }
 
+void send_ack(rel_t *r) {
+	packet_t *ack = malloc(sizeof(packet_t));
+	memset(ack, 0, sizeof(packet_t));
+	ack->len = (uint16_t) sizeof(packet_t);
+//	ack->ackno = (uint32_t) *r->receive_buffer_metadata.next_byte_expected; doesn't work ;___;
+	ack->cksum = cksum((void *)ack, sizeof(packet_t));
+	conn_sendpkt(r->c, ack, sizeof(packet_t));
+	free(ack);
+	return; 
+}
+
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 // Once flushed, send ACKs out, since there is now free buffer space
-void
-rel_output (rel_t *r)
-{
+void rel_output (rel_t *r) {
+	int total = &(r->receive_buffer_metadata.last_byte_received) - &(r->receive_buffer_metadata.last_byte_read);
+	if (total > 0) {
+		int check = conn_bufspace(r->c);
+
+		if (check < total) {
+			printf("Insufficient output space you fool\n");
+			return;
+		}
+
+		char *data = (char *)r->receive_buffer_metadata.last_byte_read;
+		data++;
+		int output = conn_output(r->c, data, total);
+		if (output != 0) {
+			printf("conn_output returned with value %d which I don't think is a good thing\n", output);
+			return;
+		}
+
+		//update metadata of receive buffer:
+		r->receive_buffer_metadata.last_byte_read += total;
+
+	}
 }
 
 // Retransmit any unACKed packets after a certain amount of time
