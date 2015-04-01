@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -12,182 +11,225 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
-
 #include "rlib.h"
-
 // TODO:
-//    - arbitrarily long receive / send buffer
-//    - multiple connections
-
+// - arbitrarily long receive / send buffer
+// - multiple connections
 // Buffers are fixed at 10 megabytes for now
 #define DEFAULT_BUFFER_SIZE (10 * 1024 *1024)
-
 //this struct will match a chunk of data with its corresponding packet sequence number
-typedef struct seqobj {
-	struct seqobj *next;
-	struct seqobj *prev;
-	int seqno;
+typedef struct receiveBuf {
+	struct receiveBuf *next;
+	uint32_t head; /* this is where the floating data starts*/
+	uint32_t tail; // this is where the next seqno should be
+	int len; //length in bytes of this data.
 	char *data;
-} seq_obj;
-
-//seq_map should point to a linked list of seq_obj objects so that we can keep track of 
-//which data chunks came with which sequence number; 
+} receiveBuf_t;
+//seq_map should point to a linked list of seq_obj objects so that we can keep track of
+//which data chunks came with which sequence number;
 //should be useful for sending ACKs and retransmissions
-seq_obj *seq_map;
 
 typedef struct {
 	void *last_byte_acked;
 	void *last_byte_sent;
 	void *last_byte_written;
+	uint32_t last_ack;
 } send_buffer_metadata;
-
 typedef struct {
 	void *last_byte_read;
 	void *next_byte_expected;
 	void *last_byte_received;
+	int next_seqno_expected;
 } receive_buffer_metadata;
-
 // The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
 // rel_t and one conn_t instance.
 // rel_t also contains a linked list for traversing all connections
 struct reliable_state {
-	rel_t *next;			/* Linked list for traversing all connections */
+	rel_t *next; /* Linked list for traversing all connections */
 	rel_t **prev;
-
-	conn_t *c;			/* This is the connection object */
-
+	conn_t *c; /* This is the connection object */
 	/* Add your own data fields below this */
-
 	void *send_buffer;
 	size_t send_buffer_size;
 	send_buffer_metadata send_buffer_metadata;
-
 	void *receive_buffer;
 	size_t receive_buffer_size;
 	receive_buffer_metadata receive_buffer_metadata;
-
+	receiveBuf_t *receive_ordering_buf;
 	// config
-	//   - window size
-	//   - timer interval
-	//   - timeout interval
-	//   - whether single connection or not
+	// - window size
+	// - timer interval
+	// - timeout interval
+	// - whether single connection or not
 	//
 	const struct config_common *config;
 };
 rel_t *rel_list;
-
 /* Creates a new reliable protocol session, returns NULL on failure.
- * Exactly one of c and ss should be NULL.  (ss is NULL when called
- * from rlib.c, while c is NULL when this function is called from
- * rel_demux.) */
+* Exactly one of c and ss should be NULL. (ss is NULL when called
+* from rlib.c, while c is NULL when this function is called from
+* rel_demux.) */
 // 1) if this is a new connection the conn_t is NULL
 // 2) if the connection has already been created,
 // then there is no need for the sockaddr_storage, so it will be NULL
 // During startup, an initial connection is created for you, leading to 2)
 // During runtime, if a new connection is created, then you have to deal with 1)
 rel_t *
-rel_create (conn_t *c, const struct sockaddr_storage *ss,
-		const struct config_common *cc)
+rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_common *cc)
 {
 	rel_t *r;
-
 	r = xmalloc (sizeof (*r));
 	memset (r, 0, sizeof (*r));
-
 	if (!c) {
 		c = conn_create (r, ss);
 		if (!c) {
-			free (r);
-			return NULL;
+		free (r);
+		return NULL;
 		}
 	}
-
 	r->c = c;
 	r->next = rel_list;
 	r->prev = &rel_list;
 	if (rel_list)
 		rel_list->prev = &r->next;
 	rel_list = r;
-
 	/* Do any other initialization you need here */
-
 	r->send_buffer = malloc(DEFAULT_BUFFER_SIZE);
 	r->send_buffer_size = DEFAULT_BUFFER_SIZE;
 	r->send_buffer_metadata.last_byte_acked = r->send_buffer;
 	r->send_buffer_metadata.last_byte_sent = r->send_buffer;
 	r->send_buffer_metadata.last_byte_written = r->send_buffer;
-
+	r->send_buffer_metadata.last_ack = 0;
 	r->receive_buffer = malloc(DEFAULT_BUFFER_SIZE);
 	r->receive_buffer_size = DEFAULT_BUFFER_SIZE;
 	r->receive_buffer_metadata.last_byte_read = r->receive_buffer;
 	r->receive_buffer_metadata.next_byte_expected = r->receive_buffer;
 	r->receive_buffer_metadata.last_byte_received = r->receive_buffer;
-
-
+	r->receive_buffer_metadata.next_seqno_expected = 1;
+	r->receive_ordering_buf = malloc(sizeof(receiveBuf_t));
 	r->config = cc;
-
 	return r;
 }
-
 void
 rel_destroy (rel_t *r)
 {
 	if (r->next)
-		r->next->prev = r->prev;
+	r->next->prev = r->prev;
 	*r->prev = r->next;
 	conn_destroy (r->c);
-
 	/* Free any other allocated memory here */
-
 	free(r->send_buffer);
 	free(r->receive_buffer);
 }
-
-
 /* This function only gets called when the process is running as a
- * server and must handle connections from multiple clients.  You have
- * to look up the rel_t structure based on the address in the
- * sockaddr_storage passed in.  If this is a new connection (sequence
- * number 1), you will need to allocate a new conn_t using rel_create
- * ().  (Pass rel_create NULL for the conn_t, so it will know to
- * allocate a new connection.)
- */
+* server and must handle connections from multiple clients. You have
+* to look up the rel_t structure based on the address in the
+* sockaddr_storage passed in. If this is a new connection (sequence
+* number 1), you will need to allocate a new conn_t using rel_create
+* (). (Pass rel_create NULL for the conn_t, so it will know to
+* allocate a new connection.)
+*/
 // Note: This is only called in server mode, i.e. when you supply the -s option when running
 // This will add a new node to the linked list if this is a new connection
 // if not, ???
 void
-rel_demux (const struct config_common *cc,
-		const struct sockaddr_storage *ss,
-		packet_t *pkt, size_t len)
+rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, packet_t *pkt, size_t len)
 {
 }
-
 // For receiving packets; these are either ACKs (for sending) or data packets (for receiving)
 // For receiving: read in and buffer the packets so they can be consumed by by rel_output
 // For sending: update how many unACKed packets there are
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
-}
+	// first check validity
+	if (!cksum(pkt, pkt->cksum))	return;
+	
+	seq_obj *head = r->head;
+	if(n == 8){ // Acks
+		if (r->send_buffer_metadata.last_ack+1 == pkt->ackno)	r->send_buffer_metadata.last_ack++;
+		return;
+	} 
+	else if (n > 12 && pkt->seqno > 0){ //receiver
+		uint32_t next_byte = (int *) *(r->receive_buffer_metadata.next_byte_expected);
+		char *copy = r->receive_buffer;
 
+		if(r->receive_buffer_metadata.next_seqno_expected == pkt->seqno){ // correct order
+			int b;
+			int d = 0;
+			for (b = next_byte; b < next_byte + n-12; b++){
+				*(copy+b) = pkt->data[d];
+				d++;
+			}
+			(uint32_t *) *(r->receive_buffer_metadata.next_byte_expected) += n - 12;
+			(uint32_t *) *(r->receive_buffer_metadata.last_byte_received) += n - 12;
+		
+		} else { // not in order
+			receiveBuf_t *receive_head = r->receive_ordering_buf;
+			bool existing_chunk = false;
+			while(receive_head != NULL){
+				if(receive_head->tail == pkt->seqno){
+					receive_head->tail++;
+					receive_head->len = n - 12;
+					strncat(receive_head->data, pkt->data, n - 12);
+					existing_chunk = true;
+				}
+				receive_head = receive_head->next;
+			}
+			receive_head = r->receive_ordering_buf;
+			if(!existing_chunk){
+				while(receive_head->next!=NULL)		receive_head = receive_head->next;
+				receive_head->next = malloc(sizeof(receiveBuf_t));
+				receive_head->next->head = pkt->seqno;
+				receive_head->next->tail = pkt->seqno + 1;
+				receive_head->next->len = n - 12;
+				strncat(receive_head->next->data, pkt->data, n-12);
+			}
+		}
+		// now fill in the spaces
+		bool gap_to_fill = true;
+		uint32_t byte_to_fill;
+
+		int o, tail_seqno;
+		while(gap_to_fill){
+			gap_to_fill = false;
+			receive_head = r->receive_ordering_buf;
+			byte_to_fill = r->receive_buffer_metadata.next_byte_expected;
+			while(receive_head != NULL){
+				if(receive_head->head == byte_to_fill){
+					copy = r->receive_buffer;
+					strncpy(copy+byte_to_fill, receive_head->data, receive_head->len);
+					(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected) += receive_head->len;
+					gap_to_fill = true;
+					tail_seqno = receive_head->tail - 1;
+				}
+				receive_head = receive_head->next;
+			}
+		if(pkt->seqno > tail_seqno)
+			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) += (pkt->seqno - tail_seqno)*500;
+		else
+			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) = 	(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected);
+				
+		return;
+	}
+	return;		
+}
 // read in data using conn_input, break this data into packets, send the packets,
 // and update how many unacked packets there are
 void
 rel_read (rel_t *s)
 {
 }
-
 void send_ack(rel_t *r) {
 	packet_t *ack = malloc(sizeof(packet_t));
 	memset(ack, 0, sizeof(packet_t));
 	ack->len = (uint16_t) sizeof(packet_t);
-//	ack->ackno = (uint32_t) *r->receive_buffer_metadata.next_byte_expected; doesn't work ;___;
+	// ack->ackno = (uint32_t) *r->receive_buffer_metadata.next_byte_expected; doesn't work ;___;
 	ack->cksum = cksum((void *)ack, sizeof(packet_t));
 	conn_sendpkt(r->c, ack, sizeof(packet_t));
 	free(ack);
-	return; 
+	return;
 }
-
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 // Once flushed, send ACKs out, since there is now free buffer space
@@ -208,17 +250,13 @@ void rel_output (rel_t *r) {
 			printf("conn_output returned with value %d which I don't think is a good thing\n", output);
 			return;
 		}
-
 		//update metadata of receive buffer:
 		r->receive_buffer_metadata.last_byte_read += total;
-
 	}
 }
-
 // Retransmit any unACKed packets after a certain amount of time
 void
 rel_timer ()
 {
-	/* Retransmit any packets that need to be retransmitted */
-
-}
+/* Retransmit any packets that need to be retransmitted */
+}_a
