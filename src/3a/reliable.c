@@ -15,12 +15,27 @@
 
 #include "rlib.h"
 
+/*
+ Nagles Algo: 
+ 
+ When the application produces data to send
+   if both the available data and the window ≥ MSS
+     send a full segment 
+   else
+     if there is unACKed data in flight
+       buffer the new data until an ACK arrives
+     else
+       send all the new data now
+ 
+ */
+
 // TODO:
 //    - arbitrarily long receive / send buffer
 //    - multiple connections
 
 // Buffers are fixed at 10 megabytes for now
 #define DEFAULT_BUFFER_SIZE (10 * 1024 *1024)
+#define MAX_PACKET_DATA_SIZE 500
 
 //this struct will match a chunk of data with its corresponding packet sequence number
 typedef struct seqobj {
@@ -172,9 +187,53 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 // read in data using conn_input, break this data into packets, send the packets,
 // and update how many unacked packets there are
+/*
+To get the data that you must transmit to the receiver, keep calling conn_input until it drains. conn_input reads data from standard input. If no data is available at the moment, conn_input will return 0. Do not loop calling conn_input if it returns 0, simply return. At the point data become available again, the library will call rel_read for ONCE, so you can read from conn_input again. When an EOF is received, conn_input will return -1. Also, do NOT try to buffer the data from conn_input more than expected. The sender's window is the only buffer you got. When the window is full, break from the loop even if there could still be available data from conn_input. When later some ack packets are received and some slots in sender's window become vacant again, call rel_read.
+ 
+ 
+ struct packet {
+	uint16_t cksum;
+	uint16_t len;
+	uint32_t ackno;
+	uint32_t seqno;		 Only valid if length > 8
+    char data[500];
+    };
+ typedef struct packet packet_t;
+ */
+
 void
 rel_read (rel_t *s)
 {
+
+
+    int bytes_recv = 1;
+    while (bytes_recv > 0) {
+        packet_t new_packet;
+        bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
+
+        
+        new_packet.cksum = 0;
+        new_packet.len = bytes_recv+12;
+        //new_packet.ackno = ?
+        //new_packet.seqno = ?
+        
+        //if LastByteWritten - LastByteAcked <= MaxSendBuffer and
+        //   LastByteSent - LastByteAcked <= Advertised Window
+        conn_sendpkt(s->c, &new_packet, sizeof(new_packet));
+        //
+        
+        //else break;
+
+        
+        s->send_buffer_metadata.last_byte_sent++;
+        s->send_buffer_metadata.last_byte_written++;
+        //s->send_buffer_metadata.last_byte_acked;
+        
+        
+    }
+   //conn_input
+    //conn_send_pckt
+    
 }
 
 void send_ack(rel_t *r) {
