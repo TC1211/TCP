@@ -30,6 +30,14 @@ typedef struct seqobj {
 	char *data;
 } seq_obj;
 
+typedef struct packet_list {
+	struct packet_list *next;
+	struct packet_list *prev;
+	// malloc'd location of the packet data
+	packet_t *packet;
+	char* packet_offset;
+} packet_list;
+
 //seq_map should point to a linked list of seq_obj objects so that we can keep track of 
 //which data chunks came with which sequence number; 
 //should be useful for sending ACKs and retransmissions
@@ -75,6 +83,10 @@ struct reliable_state {
 	const struct config_common *config;
 };
 rel_t *rel_list;
+
+void send_ack(rel_t *r);
+
+packet_list* buffer_to_packets(void* buffer, size_t buffer_len);
 
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
@@ -220,5 +232,43 @@ void
 rel_timer ()
 {
 	/* Retransmit any packets that need to be retransmitted */
+	if (rel_list) {
+		resend_packets(rel_list);
+	}
+	rel_t *rel_list_fwd = rel_list;
+	while (rel_list_fwd->next) {
+		rel_list_fwd++;
+		resend_packets(rel_list_fwd);
+	}
+	rel_t *rel_list_bwd = rel_list;
+	while (rel_list_bwd->prev) {
+		rel_list_bwd--;
+		resend_packets(rel_list_bwd);
+	}
+}
 
+void resend_packets(rel_t *rel) {
+	send_buffer_metadata md = rel->send_buffer_metadata;
+	int to_send = md.last_byte_sent - md.last_byte_acked;
+	if (to_send < 0) {
+		fprintf(stderr, "last byte acked is greater than last byte sent\n");
+	}
+	if (to_send <= 0) {
+		return;
+	}
+	packet_list* packets = buffer_to_packets(md.last_byte_acked, to_send);
+	packet_list* packets_iter = packets;
+	while (packets_iter) {
+		conn_sendpkt(rel->c, packets_iter->packet, packets_iter->packet->len);
+		packets_iter = packets_iter->next;
+	}
+	while (packets) {
+		free(packets->packet);
+		packets = packets->next;
+	}
+}
+
+// FIXME
+packet_list* buffer_to_packets(void* buffer, size_t buffer_len) {
+	return NULL;
 }
