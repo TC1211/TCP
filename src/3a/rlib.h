@@ -1,7 +1,11 @@
+#ifndef RLIB_H
+#define RLIB_H
+
 #if DMALLOC
 #include <dmalloc.h>
 #endif /* DMALLOC */
 
+#include <sys/socket.h>
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -304,3 +308,5 @@ int connect_to (int dgram, const struct sockaddr_storage *ss);
 #if NEED_CLOCK_GETTIME
 int clock_gettime (int, struct timespec *);
 #endif /* NEED_CLOCK_GETTIME */
+
+#endif /* RLIB_H */
