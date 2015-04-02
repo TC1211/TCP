@@ -79,6 +79,20 @@ int insert_packet_after(packet_list** list, packet_list* packet) {
 }
 
 /**
+ * Return the first packet with a certain sequence number in the list, or
+ * else NULL
+ */
+packet_list* get_packet_by_seqno(packet_list* list, unsigned int seqno) {
+	while (list) {
+		if (list->packet && list->packet->seqno == seqno) {
+			return list;
+		}
+		list = list->next;
+	}
+	return NULL;
+}
+
+/**
  * Insert a packet after the first node with a certain sequence number;
  * do nothing if the sequence number is not found, or if the node pointed
  * to in the list is NULL
@@ -88,12 +102,9 @@ int insert_packet_after_seqno(
 	if (!packet || !list || !(*list)) {
 		return -1;
 	}
-	packet_list* list_iter = *list;
-	while (list_iter) {
-		if (list_iter->packet && list_iter->packet->seqno == seqno) {
-			 return insert_packet_after(&list_iter, packet);
-		}
-		list_iter = list_iter->next;
+	packet_list* search = get_packet_by_seqno(*list, seqno);
+	if (search) {
+		return insert_packet_after(&search, packet);
 	}
 	return -1;
 }

@@ -30,8 +30,24 @@ void test_serialize() {
 	assert(offset == 0);
 
 	serialize_packet_data(buffer, 2, packet_a, &packets_written, &offset);
-	assert(packets_written = 1);
+	assert(packets_written == 1);
 	assert(offset == 2);
+}
+
+void test_get_by_seqno() {
+	packet_list* packet_a = new_packet();
+	packet_a->packet->seqno = 1;
+	packet_list* packet_b = new_packet();
+	packet_b->packet->seqno = 2;
+	packet_list* packet_c = new_packet();
+	packet_c->packet->seqno = 3;
+	packet_c->packet->ackno = 99;
+
+	append_packet(&packet_a, packet_b);
+	append_packet(&packet_a, packet_c);
+
+	packet_list* search = get_packet_by_seqno(packet_a, 3);
+	assert(search->packet->ackno == 99);
 }
 
 int main() {
@@ -100,4 +116,5 @@ int main() {
 	assert(packet_list_size(packet_a) == 5);
 
 	test_serialize();
+	test_get_by_seqno();
 }
