@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #define MAX_PACKET_SIZE 512
 #define PACKET_METADATA_LENGTH 12
@@ -131,6 +132,9 @@ int packet_list_size(packet_list* list) {
 	return packet_list_size_acc(list, 0);
 }
 
+/**
+ * Get the size of the data in the packets
+ */
 int packet_data_size(packet_list* list) {
 	int data_size = 0;
 	while (list) {
@@ -142,14 +146,37 @@ int packet_data_size(packet_list* list) {
 	return data_size;
 }
 
-void serialize_packet_data(char* buffer, packet_list* list) {
+/**
+ * Write out size bytes of data to the buffer from the packet list
+ * and return the number of packets written and the byte offset
+ * of the last packet written
+ */
+void serialize_packet_data(char* buffer, size_t size, packet_list* list,
+		int* packets_written, int* last_packet_offset) {
 	char* buffer_iter = buffer;
+	int packet_count = 0;
+	int offset = 0;
 	while (list) {
 		if (list->packet) {
 			uint16_t amountToCopy = list->packet->len - PACKET_METADATA_LENGTH;
+			size_t spaceLeft = size - (buffer_iter - buffer);
+			if (spaceLeft > 0 && spaceLeft < amountToCopy) {
+				amountToCopy = spaceLeft;
+				offset = amountToCopy;
+			}
+			else if (spaceLeft <= 0) {
+				break;
+			}
 			memcpy(buffer_iter, list->packet->data, amountToCopy);
 			buffer_iter += amountToCopy;
 		}
 		list = list->next;
+		packet_count++;
+	}
+	if (packets_written) {
+		*packets_written = packet_count;
+	}
+	if (last_packet_offset) {
+		*last_packet_offset = offset;
 	}
 }

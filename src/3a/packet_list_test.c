@@ -4,6 +4,36 @@
 #include "rlib.h"
 #include "packet_list.c"
 
+void test_serialize() {
+	packet_list* packet_a = new_packet();
+	strncpy(packet_a->packet->data, "first", 5);
+	packet_a->packet->len = PACKET_METADATA_LENGTH + 5;
+	packet_list* packet_b = new_packet();
+	strncpy(packet_b->packet->data, "second", 6);
+	packet_b->packet->len = PACKET_METADATA_LENGTH + 6;
+	append_packet(&packet_a, packet_b);
+	// 11 total bytes of data
+	assert(packet_data_size(packet_a) == 11);
+
+	char buffer[8];
+	int packets_written;
+	int offset;
+	serialize_packet_data(buffer, 8, packet_a, &packets_written, &offset);
+
+	assert(strncmp("firstsec", buffer, 8) == 0);
+	//printf("%.8s", buffer);
+	assert(packets_written == 2);
+	assert(offset == 3);
+
+	serialize_packet_data(buffer, 5, packet_a, &packets_written, &offset);
+	assert(packets_written == 1);
+	assert(offset == 0);
+
+	serialize_packet_data(buffer, 2, packet_a, &packets_written, &offset);
+	assert(packets_written = 1);
+	assert(offset == 2);
+}
+
 int main() {
 	packet_list* packet_a = new_packet();
 	packet_a->packet->seqno = 1;
@@ -68,4 +98,6 @@ int main() {
 	assert(packet_c->next->packet->seqno == 999);
 	// the size is now 5
 	assert(packet_list_size(packet_a) == 5);
+
+	test_serialize();
 }
