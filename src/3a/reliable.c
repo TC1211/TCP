@@ -12,61 +12,15 @@
 #include <sys/uio.h>
 #include <netinet/in.h>
 #include "rlib.h"
+
 #include <stdbool.h>
-/*
- Nagles Algo: 
- 
- When the application produces data to send
-   if both the available data and the window ≥ MSS
-     send a full segment 
-   else
-     if there is unACKed data in flight
-       buffer the new data until an ACK arrives
-     else
-       send all the new data now
- 
- */
+#include "packet_list.c"
 
 // TODO:
-// - arbitrarily long receive / send buffer
 // - multiple connections
-// Buffers are fixed at 10 megabytes for now
-#define DEFAULT_BUFFER_SIZE (10 * 1024 *1024)
+
 #define MAX_PACKET_DATA_SIZE 500
 
-//this struct will match a chunk of data with its corresponding packet sequence number
-typedef struct receiveBuf {
-	struct receiveBuf *next;
-	uint32_t head; /* this is where the floating data starts*/
-	uint32_t tail; // this is where the next seqno should be
-	int len; //length in bytes of this data.
-	char *data;
-} receiveBuf_t;
-
-//seq_map should point to a linked list of seq_obj objects so that we can keep track of
-//which data chunks came with which sequence number;
-//should be useful for sending ACKs and retransmissions
-
-typedef struct packet_list {
-	struct packet_list *next;
-	struct packet_list *prev;
-	// malloc'd location of the packet data
-	packet_t *packet;
-	char* packet_offset;
-} packet_list;
-
-typedef struct {
-	void *last_byte_acked;
-	void *last_byte_sent;
-	void *last_byte_written;
-	uint32_t last_ack;
-} send_buffer_metadata;
-typedef struct {
-	void *last_byte_read;
-	void *next_byte_expected;
-	void *last_byte_received;
-	int next_seqno_expected;
-} receive_buffer_metadata;
 // The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
 // rel_t and one conn_t instance.
 // rel_t also contains a linked list for traversing all connections
@@ -75,26 +29,18 @@ struct reliable_state {
 	rel_t **prev;
 	conn_t *c; /* This is the connection object */
 	/* Add your own data fields below this */
-	void *send_buffer;
-	size_t send_buffer_size;
-	send_buffer_metadata send_buffer_metadata;
-	void *receive_buffer;
-	size_t receive_buffer_size;
-	receive_buffer_metadata receive_buffer_metadata;
-	receiveBuf_t *receive_ordering_buf;
-	// config
-	// - window size
-	// - timer interval
-	// - timeout interval
-	// - whether single connection or not
-	//
+	packet_list* send_buffer;
+	unsigned int next_seqno_to_send;
+
+	packet_list* receive_buffer;
+	unsigned int next_seqno_expected;
+
 	const struct config_common *config;
 };
 rel_t *rel_list;
 
 void send_ack(rel_t *r);
-
-packet_list* buffer_to_packets(void* buffer, size_t buffer_len);
+void resend_packets(rel_t *rel);
 
 /* Creates a new reliable protocol session, returns NULL on failure.
 * Exactly one of c and ss should be NULL. (ss is NULL when called
@@ -125,19 +71,10 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 		rel_list->prev = &r->next;
 	rel_list = r;
 	/* Do any other initialization you need here */
-	r->send_buffer = malloc(DEFAULT_BUFFER_SIZE);
-	r->send_buffer_size = DEFAULT_BUFFER_SIZE;
-	r->send_buffer_metadata.last_byte_acked = r->send_buffer;
-	r->send_buffer_metadata.last_byte_sent = r->send_buffer;
-	r->send_buffer_metadata.last_byte_written = r->send_buffer;
-	r->send_buffer_metadata.last_ack = 0;
-	r->receive_buffer = malloc(DEFAULT_BUFFER_SIZE);
-	r->receive_buffer_size = DEFAULT_BUFFER_SIZE;
-	r->receive_buffer_metadata.last_byte_read = r->receive_buffer;
-	r->receive_buffer_metadata.next_byte_expected = r->receive_buffer;
-	r->receive_buffer_metadata.last_byte_received = r->receive_buffer;
-	r->receive_buffer_metadata.next_seqno_expected = 1;
-	r->receive_ordering_buf = malloc(sizeof(receiveBuf_t));
+	r->send_buffer = NULL;
+	r->next_seqno_to_send = 1;
+	r->receive_buffer = NULL;
+	r->next_seqno_expected = 1;
 	r->config = cc;
 	return r;
 }
@@ -149,9 +86,14 @@ rel_destroy (rel_t *r)
 	*r->prev = r->next;
 	conn_destroy (r->c);
 	/* Free any other allocated memory here */
-	free(r->send_buffer);
-	free(r->receive_buffer);
+	while (r->send_buffer) {
+		remove_head_packet(&r->send_buffer);
+	}
+	while (r->receive_buffer) {
+		remove_head_packet(&r->receive_buffer);
+	}
 }
+
 /* This function only gets called when the process is running as a
 * server and must handle connections from multiple clients. You have
 * to look up the rel_t structure based on the address in the
@@ -167,6 +109,7 @@ void
 rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, packet_t *pkt, size_t len)
 {
 }
+
 // For receiving packets; these are either ACKs (for sending) or data packets (for receiving)
 // For receiving: read in and buffer the packets so they can be consumed by by rel_output
 // For sending: update how many unACKed packets there are
@@ -243,8 +186,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 				
 		return;
 	}
-	return;		
+	return;
 }
+
 // read in data using conn_input, break this data into packets, send the packets,
 // and update how many unacked packets there are
 /*
@@ -260,7 +204,6 @@ To get the data that you must transmit to the receiver, keep calling conn_input 
     };
  typedef struct packet packet_t;
  */
-
 void
 rel_read (rel_t *s)
 {
@@ -293,9 +236,8 @@ rel_read (rel_t *s)
     }
    //conn_input
     //conn_send_pckt
-    
 }
-    
+
 void send_ack(rel_t *r) {
 	packet_t *ack = malloc(sizeof(packet_t));
 	memset(ack, 0, sizeof(packet_t));
@@ -306,6 +248,7 @@ void send_ack(rel_t *r) {
 	free(ack);
 	return;
 }
+
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 // Once flushed, send ACKs out, since there is now free buffer space
@@ -371,7 +314,3 @@ void resend_packets(rel_t *rel) {
 	}
 }
 
-// FIXME
-packet_list* buffer_to_packets(void* buffer, size_t buffer_len) {
-	return NULL;
-}
