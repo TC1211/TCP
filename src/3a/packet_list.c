@@ -2,10 +2,21 @@
 
 #define MAX_PACKET_SIZE 512
 
+/**
+ * A doubly-linked list with a malloc'd packet as the payload
+ */
 typedef struct packet_list {
+	/**
+	 * The next element in the list. NULL if the last element.
+	 */
 	struct packet_list *next;
+	/**
+	 * The previous element in the list. NULL if the first element.
+	 */
 	struct packet_list *prev;
-	// malloc'd location of the packet data
+	/**
+	 * The malloc'd location of the packet
+	 */
 	packet_t *packet;
 } packet_list;
 

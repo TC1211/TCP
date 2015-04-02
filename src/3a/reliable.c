@@ -29,12 +29,43 @@ struct reliable_state {
 	rel_t **prev;
 	conn_t *c; /* This is the connection object */
 	/* Add your own data fields below this */
+	/**
+	 * This consists of the data that has not been acknowledged yet.
+	 * Data that has been acknowledged is not included in the send buffer.
+	 *
+	 * The send buffer stores data in packets ordered ascending by their
+	 * sequence number.
+	 *
+	 * The first half consists of the data that has been sent but not
+	 * acked, and the second half consists of the data that has not
+	 * been sent yet (and therefore not acknowledged)
+	 */
 	packet_list* send_buffer;
+	/**
+	 * The sequence number of the next packet to send in the send buffer
+	 */
 	unsigned int next_seqno_to_send;
 
+	/**
+	 * This consists of the data that has not been read by the application yet.
+	 * Data that has been read by the application is not included in the receive buffer.
+	 *
+	 * The receive buffer stores data in packets ordered ascending by their
+	 * sequence number.
+	 *
+	 * The first half consists of the contiguous data that has been received,
+	 * and the second half consists of data that is not yet contiguous
+	 */
 	packet_list* receive_buffer;
+	/**
+	 * The sequence number of the lowest packet that could be received next in
+	 * the receive buffer
+	 */
 	unsigned int next_seqno_expected;
 
+	/**
+	 * The configuration parameters passed from the user
+	 */
 	const struct config_common *config;
 };
 rel_t *rel_list;
