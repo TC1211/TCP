@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #define MAX_PACKET_SIZE 512
+#define PACKET_METADATA_LENGTH 12
 
 /**
  * A doubly-linked list with a malloc'd packet as the payload
@@ -117,7 +118,7 @@ int append_packet(packet_list** list, packet_list* packet) {
 
 // tail recursion for the lols
 int packet_list_size_acc(packet_list* list, int current_size) {
-	if (list == NULL) {
+	if (!list) {
 		return current_size;
 	}
 	return packet_list_size_acc(list->next, current_size + 1);
@@ -128,4 +129,27 @@ int packet_list_size_acc(packet_list* list, int current_size) {
  */
 int packet_list_size(packet_list* list) {
 	return packet_list_size_acc(list, 0);
+}
+
+int packet_data_size(packet_list* list) {
+	int data_size = 0;
+	while (list) {
+		if (list->packet) {
+			data_size += list->packet->len - PACKET_METADATA_LENGTH;
+		}
+		list = list->next;
+	}
+	return data_size;
+}
+
+void serialize_packet_data(char* buffer, packet_list* list) {
+	char* buffer_iter = buffer;
+	while (list) {
+		if (list->packet) {
+			uint16_t amountToCopy = list->packet->len - PACKET_METADATA_LENGTH;
+			memcpy(buffer_iter, list->packet->data, amountToCopy);
+			buffer_iter += amountToCopy;
+		}
+		list = list->next;
+	}
 }
