@@ -294,23 +294,10 @@ rel_timer ()
 }
 
 void resend_packets(rel_t *rel) {
-	send_buffer_metadata md = rel->send_buffer_metadata;
-	int to_send = md.last_byte_sent - md.last_byte_acked;
-	if (to_send < 0) {
-		fprintf(stderr, "last byte acked is greater than last byte sent\n");
-	}
-	if (to_send <= 0) {
-		return;
-	}
-	packet_list* packets = buffer_to_packets(md.last_byte_acked, to_send);
-	packet_list* packets_iter = packets;
-	while (packets_iter) {
+	packet_list* packets_iter = rel->send_buffer;
+	while (packets_iter && packets_iter->packet
+			&& packets_iter->packet->seqno < rel->next_seqno_to_send) {
 		conn_sendpkt(rel->c, packets_iter->packet, packets_iter->packet->len);
 		packets_iter = packets_iter->next;
 	}
-	while (packets) {
-		free(packets->packet);
-		packets = packets->next;
-	}
 }
-
