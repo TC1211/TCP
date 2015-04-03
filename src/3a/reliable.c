@@ -148,76 +148,76 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 	// first check validity
-	if (!cksum(pkt, pkt->cksum))	return;
-	
-	//seq_obj *head = r->head;
-	if(n == 8){ // Acks
-		if (r->send_buffer_metadata.last_ack+1 == pkt->ackno)	r->send_buffer_metadata.last_ack++;
-		return;
-	} 
-	else if (n > 12 && pkt->seqno > 0){ //receiver
-		uint32_t next_byte = (int *) *(r->receive_buffer_metadata.next_byte_expected);
-		char *copy = r->receive_buffer;
-
-		if(r->receive_buffer_metadata.next_seqno_expected == pkt->seqno){ // correct order
-			int b;
-			int d = 0;
-			for (b = next_byte; b < next_byte + n-12; b++){
-				*(copy+b) = pkt->data[d];
-				d++;
-			}
-			(uint32_t *) *(r->receive_buffer_metadata.next_byte_expected) += n - 12;
-			(uint32_t *) *(r->receive_buffer_metadata.last_byte_received) += n - 12;
-		
-		} else { // not in order
-			receiveBuf_t *receive_head = r->receive_ordering_buf;
-			bool existing_chunk = false;
-			while(receive_head != NULL){
-				if(receive_head->tail == pkt->seqno){
-					receive_head->tail++;
-					receive_head->len = n - 12;
-					strncat(receive_head->data, pkt->data, n - 12);
-					existing_chunk = true;
-				}
-				receive_head = receive_head->next;
-			}
-			receive_head = r->receive_ordering_buf;
-			if(!existing_chunk){
-				while(receive_head->next!=NULL)		receive_head = receive_head->next;
-				receive_head->next = malloc(sizeof(receiveBuf_t));
-				receive_head->next->head = pkt->seqno;
-				receive_head->next->tail = pkt->seqno + 1;
-				receive_head->next->len = n - 12;
-				strncat(receive_head->next->data, pkt->data, n-12);
-			}
-		}
-		// now fill in the spaces
-		bool gap_to_fill = true;
-		uint32_t byte_to_fill;
-
-		int o, tail_seqno;
-		while(gap_to_fill){
-			gap_to_fill = false;
-			receiveBuf_t* receive_head = r->receive_ordering_buf;
-			byte_to_fill = r->receive_buffer_metadata.next_byte_expected;
-			while(receive_head != NULL){
-				if(receive_head->head == byte_to_fill){
-					copy = r->receive_buffer;
-					strncpy(copy+byte_to_fill, receive_head->data, receive_head->len);
-					(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected) += receive_head->len;
-					gap_to_fill = true;
-					tail_seqno = receive_head->tail - 1;
-				}
-				receive_head = receive_head->next;
-			}
-		if(pkt->seqno > tail_seqno)
-			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) += (pkt->seqno - tail_seqno)*500;
-		else
-			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) = 	(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected);
-				
-		return;
-	}
-	return;
+//	if (!cksum(pkt, pkt->cksum))	return;
+//	
+//	//seq_obj *head = r->head;
+//	if(n == 8){ // Acks
+//		if (r->send_buffer_metadata.last_ack+1 == pkt->ackno)	r->send_buffer_metadata.last_ack++;
+//		return;
+//	} 
+//	else if (n > 12 && pkt->seqno > 0){ //receiver
+//		uint32_t next_byte = (int *) *(r->receive_buffer_metadata.next_byte_expected);
+//		char *copy = r->receive_buffer;
+//
+//		if(r->receive_buffer_metadata.next_seqno_expected == pkt->seqno){ // correct order
+//			int b;
+//			int d = 0;
+//			for (b = next_byte; b < next_byte + n-12; b++){
+//				*(copy+b) = pkt->data[d];
+//				d++;
+//			}
+//			(uint32_t *) *(r->receive_buffer_metadata.next_byte_expected) += n - 12;
+//			(uint32_t *) *(r->receive_buffer_metadata.last_byte_received) += n - 12;
+//		
+//		} else { // not in order
+//			receiveBuf_t *receive_head = r->receive_ordering_buf;
+//			bool existing_chunk = false;
+//			while(receive_head != NULL){
+//				if(receive_head->tail == pkt->seqno){
+//					receive_head->tail++;
+//					receive_head->len = n - 12;
+//					strncat(receive_head->data, pkt->data, n - 12);
+//					existing_chunk = true;
+//				}
+//				receive_head = receive_head->next;
+//			}
+//			receive_head = r->receive_ordering_buf;
+//			if(!existing_chunk){
+//				while(receive_head->next!=NULL)		receive_head = receive_head->next;
+//				receive_head->next = malloc(sizeof(receiveBuf_t));
+//				receive_head->next->head = pkt->seqno;
+//				receive_head->next->tail = pkt->seqno + 1;
+//				receive_head->next->len = n - 12;
+//				strncat(receive_head->next->data, pkt->data, n-12);
+//			}
+//		}
+//		// now fill in the spaces
+//		bool gap_to_fill = true;
+//		uint32_t byte_to_fill;
+//
+//		int o, tail_seqno;
+//		while(gap_to_fill){
+//			gap_to_fill = false;
+//			receiveBuf_t* receive_head = r->receive_ordering_buf;
+//			byte_to_fill = r->receive_buffer_metadata.next_byte_expected;
+//			while(receive_head != NULL){
+//				if(receive_head->head == byte_to_fill){
+//					copy = r->receive_buffer;
+//					strncpy(copy+byte_to_fill, receive_head->data, receive_head->len);
+//					(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected) += receive_head->len;
+//					gap_to_fill = true;
+//					tail_seqno = receive_head->tail - 1;
+//				}
+//				receive_head = receive_head->next;
+//			}
+//		if(pkt->seqno > tail_seqno)
+//			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) += (pkt->seqno - tail_seqno)*500;
+//		else
+//			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) = 	(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected);
+//				
+//		return;
+//	}
+//	return;
 }
 
 // read in data using conn_input, break this data into packets, send the packets,
@@ -238,21 +238,20 @@ To get the data that you must transmit to the receiver, keep calling conn_input 
 void
 rel_read (rel_t *s)
 {
+    packet_t new_packet;
 
-
-    int bytes_recv = 1;
+    int bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
     while (bytes_recv > 0) {
-        packet_t new_packet;
-        bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
 
         
         new_packet.cksum = 0;
         new_packet.len = bytes_recv+12;
-        //new_packet.ackno = ?
-        //new_packet.seqno = ?
+        new_packet.ackno = 0 // this value is undefined for sending (for data packets).
+        new_packet.seqno = s->next_seqno_to_send;
         
-        //if LastByteWritten - LastByteAcked <= MaxSendBuffer and
-        //   LastByteSent - LastByteAcked <= Advertised Window
+        
+        //s->config->window;
+
         conn_sendpkt(s->c, &new_packet, sizeof(new_packet));
         //
         
@@ -262,6 +261,8 @@ rel_read (rel_t *s)
         s->send_buffer_metadata.last_byte_sent++;
         s->send_buffer_metadata.last_byte_written++;
         //s->send_buffer_metadata.last_byte_acked;
+        
+        bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
         
         
     }
