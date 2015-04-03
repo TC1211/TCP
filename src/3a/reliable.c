@@ -142,7 +142,8 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 }
 
 // For receiving packets; these are either ACKs (for sending) or data packets (for receiving)
-// For receiving: read in and buffer the packets so they can be consumed by by rel_output
+// For receiving: read in and buffer the packets so they can be consumed by by rel_output;
+// send ACKs for the packets buffered
 // For sending: update how many unACKed packets there are
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
@@ -282,7 +283,6 @@ void send_ack(rel_t *r) {
 
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
-// Once flushed, send ACKs out, since there is now free buffer space
 void rel_output (rel_t *r) {
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer);
