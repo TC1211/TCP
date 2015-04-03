@@ -285,26 +285,30 @@ void send_ack(rel_t *r) {
 // you can flush, and flush using conn_output
 // Once flushed, send ACKs out, since there is now free buffer space
 void rel_output (rel_t *r) {
-	int total = &(r->receive_buffer_metadata.last_byte_received) - &(r->receive_buffer_metadata.last_byte_read);
-	if (total > 0) {
-		int check = conn_bufspace(r->c);
-
-		if (check < total) {
-			printf("Insufficient output space you fool\n");
-			return;
-		}
-
-		char *data = (char *)r->receive_buffer_metadata.last_byte_read;
-		data++;
-		int output = conn_output(r->c, data, total);
-		if (output != 0) {
-			printf("conn_output returned with value %d which I don't think is a good thing\n", output);
-			return;
-		}
-		//update metadata of receive buffer:
-		r->receive_buffer_metadata.last_byte_read += total;
+	int check = conn_bufspace(r->c);
+	int total = packet_data_size(r->receive_buffer);
+	if (check == 0) {
+		printf("Not enough space in output\n");
+		return;
 	}
+	size_t size = (size_t) (check < total) ? check : total;
+	char *buf = malloc(size);
+	packet_list *list = r->receive_buffer;
+	int packets_written;
+	int last_packet_offset;
+	serialize_packet_data(buf, size, list, &packets_written, &last_packet_offset);
+	
+	conn_output(r->c, buf, (int) size);
+	if (last_packet_offset != 0) {
+		packets_written--;
+	}
+	int i = 0;
+	for (i = 0; i < packets_written; i++) {
+		remove_head_packet(&r->receive_buffer);
+	}
+	return;
 }
+
 // Retransmit any unACKed packets after a certain amount of time
 void
 rel_timer ()
