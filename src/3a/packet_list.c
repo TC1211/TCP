@@ -1,8 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_PACKET_SIZE 512
-#define PACKET_METADATA_LENGTH 12
+#include "constants.h"
 
 /**
  * A doubly-linked list with a malloc'd packet as the payload

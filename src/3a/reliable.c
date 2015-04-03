@@ -15,11 +15,11 @@
 
 #include <stdbool.h>
 #include "packet_list.c"
+#include "constants.h"
 
 // TODO:
 // - multiple connections
 
-#define MAX_PACKET_DATA_SIZE 500
 
 // The mapping from rel_t to conn_t is one-to-one; for every connection, there is one
 // rel_t and one conn_t instance.
@@ -238,36 +238,34 @@ To get the data that you must transmit to the receiver, keep calling conn_input 
 void
 rel_read (rel_t *s)
 {
-    packet_t new_packet;
 
-    int bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
-    while (bytes_recv > 0) {
-
+    while (1) {
+        packet_list* packet_node = new_packet();
+        packet_t* packet = packet_node->packet;
+        uint16_t bytes_recv = conn_input(s->c, packet->data, MAX_PACKET_DATA_SIZE);
         
-        new_packet.cksum = 0;
-        new_packet.len = bytes_recv+12;
-        new_packet.ackno = 0 // this value is undefined for sending (for data packets).
-        new_packet.seqno = s->next_seqno_to_send;
+        if (bytes_recv <= 0) { //special behavior required for EOF (-1)?
+            break;
+        }
         
-        
-        //s->config->window;
-
-        conn_sendpkt(s->c, &new_packet, sizeof(new_packet));
-        //
-        
-        //else break;
-
-        
-        s->send_buffer_metadata.last_byte_sent++;
-        s->send_buffer_metadata.last_byte_written++;
-        //s->send_buffer_metadata.last_byte_acked;
-        
-        bytes_recv = conn_input(s->c, new_packet.data, MAX_PACKET_DATA_SIZE);
+        uint16_t len = bytes_recv + PACKET_METADATA_LENGTH;
+        packet->cksum = 0;
+        packet->len = htons(len);
+        packet->ackno = 0; // this value is undefined for sending (for data packets).
+        packet->seqno = htonl(s->next_seqno_to_send);
+        packet->cksum = cksum(&packet, len);
         
         
+        //if our buffer isn't full DO
+        append_packet(&s->send_buffer, packet_node);
+        //else break
+        
+        if (s->config->window >= s->next_seqno_to_send - s->next_seqno_expected) { //if we don't overflow the window
+            conn_sendpkt(s->c, packet, sizeof(packet));
+            s->next_seqno_to_send++;
+        }
     }
-   //conn_input
-    //conn_send_pckt
+
 }
 
 void send_ack(rel_t *r) {
