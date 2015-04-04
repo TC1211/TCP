@@ -70,7 +70,7 @@ struct reliable_state {
 };
 rel_t *rel_list;
 
-void send_ack(rel_t *r);
+void send_ack(rel_t *r, uint32_t ackno);
 void resend_packets(rel_t *rel);
 
 /* Creates a new reliable protocol session, returns NULL on failure.
@@ -149,93 +149,25 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 	// first check validity
-//	if (!cksum(pkt, pkt->cksum))	return;
-//	
-//	//seq_obj *head = r->head;
-//	if(n == 8){ // Acks
-//		if (r->send_buffer_metadata.last_ack+1 == pkt->ackno)	r->send_buffer_metadata.last_ack++;
-//		return;
-//	} 
-//	else if (n > 12 && pkt->seqno > 0){ //receiver
-//		uint32_t next_byte = (int *) *(r->receive_buffer_metadata.next_byte_expected);
-//		char *copy = r->receive_buffer;
-//
-//		if(r->receive_buffer_metadata.next_seqno_expected == pkt->seqno){ // correct order
-//			int b;
-//			int d = 0;
-//			for (b = next_byte; b < next_byte + n-12; b++){
-//				*(copy+b) = pkt->data[d];
-//				d++;
-//			}
-//			(uint32_t *) *(r->receive_buffer_metadata.next_byte_expected) += n - 12;
-//			(uint32_t *) *(r->receive_buffer_metadata.last_byte_received) += n - 12;
-//		
-//		} else { // not in order
-//			receiveBuf_t *receive_head = r->receive_ordering_buf;
-//			bool existing_chunk = false;
-//			while(receive_head != NULL){
-//				if(receive_head->tail == pkt->seqno){
-//					receive_head->tail++;
-//					receive_head->len = n - 12;
-//					strncat(receive_head->data, pkt->data, n - 12);
-//					existing_chunk = true;
-//				}
-//				receive_head = receive_head->next;
-//			}
-//			receive_head = r->receive_ordering_buf;
-//			if(!existing_chunk){
-//				while(receive_head->next!=NULL)		receive_head = receive_head->next;
-//				receive_head->next = malloc(sizeof(receiveBuf_t));
-//				receive_head->next->head = pkt->seqno;
-//				receive_head->next->tail = pkt->seqno + 1;
-//				receive_head->next->len = n - 12;
-//				strncat(receive_head->next->data, pkt->data, n-12);
-//			}
-//		}
-//		// now fill in the spaces
-//		bool gap_to_fill = true;
-//		uint32_t byte_to_fill;
-//
-//		int o, tail_seqno;
-//		while(gap_to_fill){
-//			gap_to_fill = false;
-//			receiveBuf_t* receive_head = r->receive_ordering_buf;
-//			byte_to_fill = r->receive_buffer_metadata.next_byte_expected;
-//			while(receive_head != NULL){
-//				if(receive_head->head == byte_to_fill){
-//					copy = r->receive_buffer;
-//					strncpy(copy+byte_to_fill, receive_head->data, receive_head->len);
-//					(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected) += receive_head->len;
-//					gap_to_fill = true;
-//					tail_seqno = receive_head->tail - 1;
-//				}
-//				receive_head = receive_head->next;
-//			}
-//		if(pkt->seqno > tail_seqno)
-//			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) += (pkt->seqno - tail_seqno)*500;
-//		else
-//			(uint32_t*) *(r->receive_buffer_metadata.last_byte_received) = 	(uint32_t*) *(r->receive_buffer_metadata.next_byte_expected);
-//				
-//		return;
-//	}
-//	return;
+	if (!cksum(pkt, pkt->cksum))	return;
+	
+	if(pkt->len == 8){ // Acks, remove the entry
+		packet_list* send_buffer_head = r->send_buffer; // this assume that the pointer directly points to the true head
+		while(send_buffer_head->packet->seqno != pkt->seqno && send_buffer_head !=NULL){
+			remove_head_packet(&send_buffer_head);
+		}
+	} 
+	else if (pkt->len >= 12 && pkt->seqno > 0){ //receiver
+		if(r->config->window > packet_list_size(r->receive_buffer) && pkt->seqno>=r->next_seqno_expected){ //enforce window size and next to receive pointer
+			insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
+			if(pkt->seqno == r->next_seqno_expected)	r->next_seqno_expected++;
+			send_ack(r, r->next_seqno_expected);
+		}
+	}
+	return;
 }
 
-// read in data using conn_input, break this data into packets, send the packets,
-// and update how many unacked packets there are
-/*
-To get the data that you must transmit to the receiver, keep calling conn_input until it drains. conn_input reads data from standard input. If no data is available at the moment, conn_input will return 0. Do not loop calling conn_input if it returns 0, simply return. At the point data become available again, the library will call rel_read for ONCE, so you can read from conn_input again. When an EOF is received, conn_input will return -1. Also, do NOT try to buffer the data from conn_input more than expected. The sender's window is the only buffer you got. When the window is full, break from the loop even if there could still be available data from conn_input. When later some ack packets are received and some slots in sender's window become vacant again, call rel_read.
- 
- 
- struct packet {
-	uint16_t cksum;
-	uint16_t len;
-	uint32_t ackno;
-	uint32_t seqno;		 Only valid if length > 8
-    char data[500];
-    };
- typedef struct packet packet_t;
- */
+
 void
 rel_read (rel_t *s)
 {
@@ -269,13 +201,13 @@ rel_read (rel_t *s)
 
 }
 
-void send_ack(rel_t *r) {
+void send_ack(rel_t *r, uint32_t ackno) {
 	packet_t *ack = malloc(sizeof(packet_t));
 	memset(ack, 0, sizeof(packet_t));
-	ack->len = (uint16_t) sizeof(packet_t);
-	// ack->ackno = (uint32_t) *r->receive_buffer_metadata.next_byte_expected; doesn't work ;___;
-	ack->cksum = cksum((void *)ack, sizeof(packet_t));
-	conn_sendpkt(r->c, ack, sizeof(packet_t));
+	ack->len = (uint16_t) 8;
+	ack->ackno = (uint32_t) ackno;
+	ack->cksum = cksum((void *)ack, sizeof(ack));
+	conn_sendpkt(r->c, ack, sizeof(ack));
 	free(ack);
 	return;
 }

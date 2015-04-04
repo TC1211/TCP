@@ -109,6 +109,26 @@ int insert_packet_after_seqno(
 }
 
 /**
+ * Insertion sort of a packet
+ */
+int insert_packet_in_order(packet_list** list, unsigned int seqno) {
+	if ( !list || !(*list)) {
+		return -1;
+	}
+	packet_list* currentNode = *list;
+	packet_list* nextNode = (*list)->next;
+	while(nextNode!=NULL){ //search the list
+		if(currentNode->packet->seqno < seqno && nextNode->packet->seqno > seqno){
+			insert_packet_after(list, currentNode);;
+			break;
+		}
+		currentNode = currentNode->next;
+		nextNode = nextNode -> next;
+	}
+
+	return -1;
+}
+/**
  * Insert a packet at the end of the list; if the node pointed to in the list
  * is NULL, then initialize the list with that packet
  */
