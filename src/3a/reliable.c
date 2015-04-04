@@ -68,6 +68,12 @@ struct reliable_state {
 	 */
 	const struct config_common *config;	
 	uint32_t seqno_track;
+
+	//flags for calling rel_destroy; check if all equal 1, and if so, call rel_destroy
+	uint8_t eof_other_side;
+	uint8_t eof_conn_input;
+	uint8_t eof_all_acked;
+	uint8_t eof_conn_output;
 };
 rel_t *rel_list;
 
@@ -109,6 +115,11 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	r->next_seqno_expected = 1;
 	r->config = cc;
 	r->seqno_track = 1;
+
+	eof_other_side = 0;
+	eof_conn_input = 0;
+	eof_all_acked = 0;
+	eof_conn_output = 0;
 	return r;
 }
 void
@@ -199,6 +210,7 @@ rel_read (rel_t *s)
 
 	packet_list *start = get_packet_by_seqno(s->send_buffer, s->next_seqno_to_send);
 	
+}
 /*    	while (1) {
       		packet_list* packet_node = new_packet();
         	packet_t* packet = packet_node->packet;
@@ -225,8 +237,7 @@ rel_read (rel_t *s)
             		s->next_seqno_to_send++;
         	}
     	}
-*/
-}
+}*/
 
 void send_ack(rel_t *r, uint32_t ackno) {
 	packet_t *ack = malloc(sizeof(packet_t));
@@ -263,6 +274,12 @@ void rel_output (rel_t *r) {
 	int i = 0;
 	for (i = 0; i < packets_written; i++) {
 		remove_head_packet(&r->receive_buffer);
+	}
+	eof_conn_output = 1;
+	if (eof_other_side == 1 && eof_conn_input == 1 && 
+		eof_all_acked == 1 && eof_conn_output == 1) {
+		//there has to be a better way to do this
+		rel_destroy(r);
 	}
 	return;
 }
