@@ -13,23 +13,23 @@ void test_serialize() {
 	packet_b->packet->len = PACKET_METADATA_LENGTH + 6;
 	append_packet(&packet_a, packet_b);
 	// 11 total bytes of data
-	assert(packet_data_size(packet_a) == 11);
+	assert(packet_data_size(packet_a, -1) == 11);
 
 	char buffer[8];
 	int packets_written;
 	int offset;
-	serialize_packet_data(buffer, 8, packet_a, &packets_written, &offset);
+	serialize_packet_data(buffer, 8, -1, packet_a, &packets_written, &offset);
 
 	assert(strncmp("firstsec", buffer, 8) == 0);
 	//printf("%.8s", buffer);
 	assert(packets_written == 2);
 	assert(offset == 3);
 
-	serialize_packet_data(buffer, 5, packet_a, &packets_written, &offset);
+	serialize_packet_data(buffer, 5, -1, packet_a, &packets_written, &offset);
 	assert(packets_written == 1);
 	assert(offset == 0);
 
-	serialize_packet_data(buffer, 2, packet_a, &packets_written, &offset);
+	serialize_packet_data(buffer, 2, -1, packet_a, &packets_written, &offset);
 	assert(packets_written == 1);
 	assert(offset == 2);
 }

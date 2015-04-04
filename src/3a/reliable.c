@@ -216,7 +216,7 @@ void send_ack(rel_t *r, uint32_t ackno) {
 // you can flush, and flush using conn_output
 void rel_output (rel_t *r) {
 	int check = conn_bufspace(r->c);
-	int total = packet_data_size(r->receive_buffer);
+	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
 	if (check == 0) {
 		printf("Not enough space in output\n");
 		return;
@@ -226,8 +226,9 @@ void rel_output (rel_t *r) {
 	packet_list *list = r->receive_buffer;
 	int packets_written;
 	int last_packet_offset;
-	serialize_packet_data(buf, size, list, &packets_written, &last_packet_offset);
-	
+	serialize_packet_data(buf, size, r->next_seqno_expected, list,
+			&packets_written, &last_packet_offset);
+
 	conn_output(r->c, buf, (int) size);
 	if (last_packet_offset != 0) {
 		packets_written--;
