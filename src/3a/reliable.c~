@@ -72,9 +72,6 @@ struct reliable_state {
 };
 rel_t *rel_list;
 
-void send_ack(rel_t *r, uint32_t ackno);
-void resend_packets(rel_t *rel);
-
 /* Creates a new reliable protocol session, returns NULL on failure.
 * Exactly one of c and ss should be NULL. (ss is NULL when called
 * from rlib.c, while c is NULL when this function is called from
@@ -109,14 +106,13 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	r->receive_buffer = NULL;
 	r->next_seqno_expected = 1;
 	r->config = cc;
-
-	eof_other_side = 0;
-	eof_conn_input = 0;
-	eof_all_acked = 0;
-	eof_conn_output = 0;
-
+	r->eof_other_side = 0;
+	r->eof_conn_input = 0;
+	r->eof_all_acked = 0;
+	r->eof_conn_output = 0;
 	return r;
 }
+
 void
 rel_destroy (rel_t *r)
 {
@@ -149,6 +145,17 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 {
 }
 
+void send_ack(rel_t *r, uint32_t ackno) {
+	packet_t *ack = malloc(sizeof(packet_t));
+	memset(ack, 0, sizeof(packet_t));
+	ack->len = (uint16_t) 8;
+	ack->ackno = (uint32_t) ackno;
+	ack->cksum = cksum((void *)ack, sizeof(ack));
+	conn_sendpkt(r->c, ack, sizeof(ack));
+	free(ack);
+	return;
+}
+
 // For receiving packets; these are either ACKs (for sending) or data packets (for receiving)
 // For receiving: read in and buffer the packets so they can be consumed by by rel_output;
 // send ACKs for the packets buffered
@@ -157,20 +164,31 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 	// first check validity
-	if (!cksum(pkt, pkt->cksum))	return;
+	unsigned int check = pkt->cksum;
+	pkt->cksum = 0;
+	if (cksum(pkt, n)!=check)	return;
 	
-	if(pkt->len == 8){ // Acks, remove the entry
+	if(n == 8){ // Ack only
 		packet_list* send_buffer_head = r->send_buffer; // this assume that the pointer directly points to the true head
-		while(send_buffer_head->packet->seqno != pkt->seqno && send_buffer_head !=NULL){
+		while(send_buffer_head->packet->ackno != pkt->seqno && send_buffer_head !=NULL){
 			remove_head_packet(&send_buffer_head);
 		}
 	} 
-	else if (pkt->len >= 12 && pkt->seqno > 0){ //receiver
-		if(r->config->window > packet_list_size(r->receive_buffer) && pkt->seqno>=r->next_seqno_expected){ //enforce window size and next to receive pointer
-			insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
-			if(pkt->seqno == r->next_seqno_expected)	r->next_seqno_expected++;
+	else if (n > 12 && pkt->seqno > 0){ //ack and data
+		insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
+		if(pkt->seqno == r->next_seqno_expected){
+			r->next_seqno_expected++;
 			send_ack(r, r->next_seqno_expected);
 		}
+
+		packet_list* send_buffer_head = r->send_buffer; // piggy ack
+		while(send_buffer_head->packet->ackno < pkt->seqno && send_buffer_head !=NULL){
+			remove_head_packet(&send_buffer_head);
+		}
+	}
+	else if(n == 12){
+		r->eof_other_side = 1;
+		if(r->next_seqno_to_send == pkt->ackno)	r->eof_all_acked = 1;
 	}
 	return;
 }
@@ -186,8 +204,11 @@ rel_read (rel_t *s)
 	while (packet_list_size(send_buffer) < window_size) {
 		packet_list* packet_node = new_packet();
 		int bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
-		if (bytes_read <= 0) {
+		if (bytes_read == 0) {
 			break;
+		}
+		if(bytes_read < 0){
+			s->eof_conn_input = 1;
 		}
 		packet_node->packet->cksum = 0;
 		int packet_length = DATA_PACKET_METADATA_LENGTH + bytes_read;
@@ -201,17 +222,6 @@ rel_read (rel_t *s)
 		conn_sendpkt(s->c, packet_node->packet, packet_length);
 		append_packet(&s->send_buffer, packet_node);
 	}
-}
-
-void send_ack(rel_t *r, uint32_t ackno) {
-	packet_t *ack = malloc(sizeof(packet_t));
-	memset(ack, 0, sizeof(packet_t));
-	ack->len = (uint16_t) 8;
-	ack->ackno = (uint32_t) ackno;
-	ack->cksum = cksum((void *)ack, sizeof(ack));
-	conn_sendpkt(r->c, ack, sizeof(ack));
-	free(ack);
-	return;
 }
 
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
@@ -248,6 +258,14 @@ void rel_output (rel_t *r) {
 	return;
 }
 
+void resend_packets(rel_t *rel) {
+	packet_list* packets_iter = rel->send_buffer;
+	while (packets_iter && packets_iter->packet) {
+		conn_sendpkt(rel->c, packets_iter->packet, packets_iter->packet->len);
+		packets_iter = packets_iter->next;
+	}
+}
+
 // Retransmit any unACKed packets after a certain amount of time
 void
 rel_timer ()
@@ -265,13 +283,5 @@ rel_timer ()
 	while (rel_list_bwd->prev && *(rel_list_bwd->prev)) {
 		rel_list_bwd = *(rel_list_bwd->prev);
 		resend_packets(rel_list_bwd);
-	}
-}
-
-void resend_packets(rel_t *rel) {
-	packet_list* packets_iter = rel->send_buffer;
-	while (packets_iter && packets_iter->packet) {
-		conn_sendpkt(rel->c, packets_iter->packet, packets_iter->packet->len);
-		packets_iter = packets_iter->next;
 	}
 }

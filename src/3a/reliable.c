@@ -106,10 +106,10 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	r->receive_buffer = NULL;
 	r->next_seqno_expected = 1;
 	r->config = cc;
-	eof_other_side = 0;
-	eof_conn_input = 0;
-	eof_all_acked = 0;
-	eof_conn_output = 0;
+	r->eof_other_side = 0;
+	r->eof_conn_input = 0;
+	r->eof_all_acked = 0;
+	r->eof_conn_output = 0;
 	return r;
 }
 
@@ -164,20 +164,31 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 	// first check validity
-	if (!cksum(pkt, pkt->cksum))	return;
+	unsigned int check = pkt->cksum;
+	pkt->cksum = 0;
+	if (cksum(pkt, n)!=check)	return;
 	
-	if(pkt->len == 8){ // Acks, remove the entry
+	if(n == 8){ // Ack only
 		packet_list* send_buffer_head = r->send_buffer; // this assume that the pointer directly points to the true head
-		while(send_buffer_head->packet->seqno != pkt->seqno && send_buffer_head !=NULL){
+		while(send_buffer_head->packet->ackno != pkt->seqno && send_buffer_head !=NULL){
 			remove_head_packet(&send_buffer_head);
 		}
 	} 
-	else if (pkt->len >= 12 && pkt->seqno > 0){ //receiver
-		if(r->config->window > packet_list_size(r->receive_buffer) && pkt->seqno>=r->next_seqno_expected){ //enforce window size and next to receive pointer
-			insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
-			if(pkt->seqno == r->next_seqno_expected)	r->next_seqno_expected++;
+	else if (n > 12 && pkt->seqno > 0){ //ack and data
+		insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
+		if(pkt->seqno == r->next_seqno_expected){
+			r->next_seqno_expected++;
 			send_ack(r, r->next_seqno_expected);
 		}
+
+		packet_list* send_buffer_head = r->send_buffer; // piggy ack
+		while(send_buffer_head->packet->ackno < pkt->seqno && send_buffer_head !=NULL){
+			remove_head_packet(&send_buffer_head);
+		}
+	}
+	else if(n == 12){
+		r->eof_other_side = 1;
+		if(r->next_seqno_to_send == pkt->ackno)	r->eof_all_acked = 1;
 	}
 	return;
 }
@@ -193,8 +204,11 @@ rel_read (rel_t *s)
 	while (packet_list_size(send_buffer) < window_size) {
 		packet_list* packet_node = new_packet();
 		int bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
-		if (bytes_read <= 0) {
+		if (bytes_read == 0) {
 			break;
+		}
+		if(bytes_read < 0){
+			s->eof_conn_input = 1;
 		}
 		packet_node->packet->cksum = 0;
 		int packet_length = DATA_PACKET_METADATA_LENGTH + bytes_read;
@@ -235,9 +249,9 @@ void rel_output (rel_t *r) {
 	for (i = 0; i < packets_written; i++) {
 		remove_head_packet(&r->receive_buffer);
 	}
-	eof_conn_output = 1;
-	if (eof_other_side == 1 && eof_conn_input == 1 && 
-		eof_all_acked == 1 && eof_conn_output == 1) {
+	r->eof_conn_output = 1;
+	if (r->eof_other_side == 1 && r->eof_conn_input == 1 && 
+		r->eof_all_acked == 1 && r->eof_conn_output == 1) {
 		//there has to be a better way to do this
 		rel_destroy(r);
 	}
