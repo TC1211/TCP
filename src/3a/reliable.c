@@ -30,21 +30,13 @@ struct reliable_state {
 	conn_t *c; /* This is the connection object */
 	/* Add your own data fields below this */
 	/**
-	 * This consists of the data that has not been acknowledged yet.
+	 * This consists of the data that has been sent but not acknowledged.
 	 * Data that has been acknowledged is not included in the send buffer.
 	 *
 	 * The send buffer stores data in packets ordered ascending by their
 	 * sequence number.
-	 *
-	 * The first half consists of the data that has been sent but not
-	 * acked, and the second half consists of the data that has not
-	 * been sent yet (and therefore not acknowledged)
 	 */
 	packet_list* send_buffer;
-	/**
-	 * The sequence number of the next packet to send in the send buffer
-	 */
-	unsigned int next_seqno_to_send;
 
 	/**
 	 * This consists of the data that has not been read by the application yet.
@@ -67,7 +59,6 @@ struct reliable_state {
 	 * The configuration parameters passed from the user
 	 */
 	const struct config_common *config;	
-	uint32_t seqno_track;
 };
 rel_t *rel_list;
 
@@ -104,11 +95,9 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	rel_list = r;
 	/* Do any other initialization you need here */
 	r->send_buffer = NULL;
-	r->next_seqno_to_send = 1;
 	r->receive_buffer = NULL;
 	r->next_seqno_expected = 1;
 	r->config = cc;
-	r->seqno_track = 1;
 	return r;
 }
 void
@@ -289,8 +278,7 @@ rel_timer ()
 
 void resend_packets(rel_t *rel) {
 	packet_list* packets_iter = rel->send_buffer;
-	while (packets_iter && packets_iter->packet
-			&& packets_iter->packet->seqno < rel->next_seqno_to_send) {
+	while (packets_iter && packets_iter->packet) {
 		conn_sendpkt(rel->c, packets_iter->packet, packets_iter->packet->len);
 		packets_iter = packets_iter->next;
 	}
