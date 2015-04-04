@@ -66,7 +66,8 @@ struct reliable_state {
 	/**
 	 * The configuration parameters passed from the user
 	 */
-	const struct config_common *config;
+	const struct config_common *config;	
+	uint32_t seqno_track;
 };
 rel_t *rel_list;
 
@@ -107,6 +108,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	r->receive_buffer = NULL;
 	r->next_seqno_expected = 1;
 	r->config = cc;
+	r->seqno_track = 1;
 	return r;
 }
 void
@@ -171,34 +173,59 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 void
 rel_read (rel_t *s)
 {
+	while (1) {
+		packet_list* packet_node = new_packet();
+        	packet_t* packet = packet_node->packet;
+        	uint16_t bytes_recv = conn_input(s->c, packet->data, MAX_PACKET_DATA_SIZE);
+        
+        	if (bytes_recv <= 0) { //special behavior required for EOF (-1)?
+            		break;
+		}
+        
+        	uint16_t len = bytes_recv + PACKET_METADATA_LENGTH;
+        	packet->cksum = 0;
+        	packet->len = htons(len);
+        	packet->ackno = 0; // this value is undefined for sending (for data packets).
+        	packet->seqno = htonl(s->seqno_track);
+        	packet->cksum = cksum(&packet, len);
+        
+        
+        	//if our buffer isn't full DO
+        	append_packet(&s->send_buffer, packet_node);
+        	//else break
 
-    while (1) {
-        packet_list* packet_node = new_packet();
-        packet_t* packet = packet_node->packet;
-        uint16_t bytes_recv = conn_input(s->c, packet->data, MAX_PACKET_DATA_SIZE);
-        
-        if (bytes_recv <= 0) { //special behavior required for EOF (-1)?
-            break;
-        }
-        
-        uint16_t len = bytes_recv + PACKET_METADATA_LENGTH;
-        packet->cksum = 0;
-        packet->len = htons(len);
-        packet->ackno = 0; // this value is undefined for sending (for data packets).
-        packet->seqno = htonl(s->next_seqno_to_send);
-        packet->cksum = cksum(&packet, len);
-        
-        
-        //if our buffer isn't full DO
-        append_packet(&s->send_buffer, packet_node);
-        //else break
-        
-        if (s->config->window >= s->next_seqno_to_send - s->next_seqno_expected) { //if we don't overflow the window
-            conn_sendpkt(s->c, packet, sizeof(packet));
-            s->next_seqno_to_send++;
-        }
-    }
+		s->seqno_track++;
+	}
 
+	packet_list *start = get_packet_by_seqno(s->send_buffer, s->next_seqno_to_send);
+	
+/*    	while (1) {
+      		packet_list* packet_node = new_packet();
+        	packet_t* packet = packet_node->packet;
+        	uint16_t bytes_recv = conn_input(s->c, packet->data, MAX_PACKET_DATA_SIZE);
+        
+        	if (bytes_recv <= 0) { //special behavior required for EOF (-1)?
+            		break;
+		}
+        
+        	uint16_t len = bytes_recv + PACKET_METADATA_LENGTH;
+        	packet->cksum = 0;
+        	packet->len = htons(len);
+        	packet->ackno = 0; // this value is undefined for sending (for data packets).
+        	packet->seqno = htonl(s->next_seqno_to_send);
+        	packet->cksum = cksum(&packet, len);
+        
+        
+        	//if our buffer isn't full DO
+        	append_packet(&s->send_buffer, packet_node);
+        	//else break
+        
+		if (s->config->window >= s->next_seqno_to_send - s->next_seqno_expected) 			{ //if we don't overflow the window
+        		conn_sendpkt(s->c, packet, sizeof(packet));
+            		s->next_seqno_to_send++;
+        	}
+    	}
+*/
 }
 
 void send_ack(rel_t *r, uint32_t ackno) {
