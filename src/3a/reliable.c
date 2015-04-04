@@ -152,7 +152,7 @@ void send_ack(rel_t *r, uint32_t ackno) {
 	ack->len = (uint16_t) ack_packet_size;
 	ack->ackno = (uint32_t) ackno;
 	ack->cksum = cksum((void *)ack, ack_packet_size);
-	conn_sendpkt(r->c, ack, ack_packet_size);
+	conn_sendpkt(r->c, (packet_t *)ack, ack_packet_size);
 	free(ack);
 	return;
 }
