@@ -7,10 +7,10 @@
 void test_serialize() {
 	packet_list* packet_a = new_packet();
 	strncpy(packet_a->packet->data, "first", 5);
-	packet_a->packet->len = PACKET_METADATA_LENGTH + 5;
+	packet_a->packet->len = DATA_PACKET_METADATA_LENGTH + 5;
 	packet_list* packet_b = new_packet();
 	strncpy(packet_b->packet->data, "second", 6);
-	packet_b->packet->len = PACKET_METADATA_LENGTH + 6;
+	packet_b->packet->len = DATA_PACKET_METADATA_LENGTH + 6;
 	append_packet(&packet_a, packet_b);
 	// 11 total bytes of data
 	assert(packet_data_size(packet_a, -1) == 11);

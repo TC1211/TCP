@@ -173,7 +173,7 @@ int packet_data_size(packet_list* list, int seqno_limit) {
 			if (seqno_limit != -1 && list->packet->seqno >= seqno_limit) {
 				break;
 			}
-			data_size += list->packet->len - PACKET_METADATA_LENGTH;
+			data_size += list->packet->len - DATA_PACKET_METADATA_LENGTH;
 		}
 		list = list->next;
 	}
@@ -198,7 +198,7 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 			if (seqno_limit != -1 && list->packet->seqno >= seqno_limit) {
 				break;
 			}
-			uint16_t amountToCopy = list->packet->len - PACKET_METADATA_LENGTH;
+			uint16_t amountToCopy = list->packet->len - DATA_PACKET_METADATA_LENGTH;
 			size_t spaceLeft = size - (buffer_iter - buffer);
 			if (spaceLeft > 0 && spaceLeft < amountToCopy) {
 				amountToCopy = spaceLeft;
