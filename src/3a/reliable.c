@@ -175,7 +175,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			remove_head_packet(&send_buffer_head);
 		}
 	} 
-	else if (n > 12 && pkt->seqno > 0){ //ack and data
+	else if (n >= 12 && pkt->seqno > 0){ //ack and data
 		insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
 		if(pkt->seqno == r->next_seqno_expected){
 			r->next_seqno_expected++;
@@ -186,10 +186,14 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		while(send_buffer_head->packet->ackno < pkt->seqno && send_buffer_head !=NULL){
 			remove_head_packet(&send_buffer_head);
 		}
+		if(n == 12){
+			r->eof_other_side = 1;
+			if(r->next_seqno_to_send == pkt->ackno)	r->eof_all_acked = 1;
+		}
 	}
-	else if(n == 12){
-		r->eof_other_side = 1;
-		if(r->next_seqno_to_send == pkt->ackno)	r->eof_all_acked = 1;
+	if (r->eof_other_side && r->eof_conn_input && 
+		r->eof_all_acked && r->eof_conn_output) {
+		rel_destroy(r);
 	}
 	return;
 }
