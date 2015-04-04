@@ -228,6 +228,10 @@ rel_read (rel_t *s)
 		conn_sendpkt(s->c, packet_node->packet, packet_length);
 		append_packet(&s->send_buffer, packet_node);
 	}
+	if (s->eof_other_side && s->eof_conn_input &&
+		s->eof_all_acked && s->eof_conn_output) {
+		rel_destroy(s);
+	}
 }
 
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
@@ -256,8 +260,8 @@ void rel_output (rel_t *r) {
 		remove_head_packet(&r->receive_buffer);
 	}
 	r->eof_conn_output = 1;
-	if (r->eof_other_side == 1 && r->eof_conn_input == 1 && 
-		r->eof_all_acked == 1 && r->eof_conn_output == 1) {
+	if (r->eof_other_side && r->eof_conn_input &&
+		r->eof_all_acked && r->eof_conn_output) {
 		//there has to be a better way to do this
 		rel_destroy(r);
 	}
