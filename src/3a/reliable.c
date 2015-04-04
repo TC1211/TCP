@@ -146,12 +146,13 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 }
 
 void send_ack(rel_t *r, uint32_t ackno) {
-	packet_t *ack = malloc(sizeof(packet_t));
-	memset(ack, 0, sizeof(packet_t));
-	ack->len = (uint16_t) 8;
+	size_t ack_packet_size = sizeof(struct ack_packet);
+	struct ack_packet* ack = (struct ack_packet*) malloc(ack_packet_size);
+	memset(ack, 0, ack_packet_size);
+	ack->len = (uint16_t) ack_packet_size;
 	ack->ackno = (uint32_t) ackno;
-	ack->cksum = cksum((void *)ack, sizeof(ack));
-	conn_sendpkt(r->c, ack, sizeof(ack));
+	ack->cksum = cksum((void *)ack, ack_packet_size);
+	conn_sendpkt(r->c, ack, ack_packet_size);
 	free(ack);
 	return;
 }
@@ -198,9 +199,9 @@ rel_read (rel_t *s)
 		}
 		packet_node->packet->cksum = 0;
 		int packet_length = DATA_PACKET_METADATA_LENGTH + bytes_read;
-		packet_node->packet->len = htons(packet_length);
-		packet_node->packet->ackno = htonl(s->next_seqno_expected - 1);
-		packet_node->packet->seqno = htonl(s->next_seqno_to_send);
+		packet_node->packet->len = packet_length;
+		packet_node->packet->ackno = s->next_seqno_expected - 1;
+		packet_node->packet->seqno = s->next_seqno_to_send;
 		uint16_t checksum = cksum(packet_node->packet, packet_length);
 		packet_node->packet->cksum = checksum;
 		s->next_seqno_to_send++;
