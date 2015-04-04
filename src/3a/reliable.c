@@ -250,12 +250,12 @@ rel_timer ()
 	}
 	rel_t *rel_list_fwd = rel_list;
 	while (rel_list_fwd->next) {
-		rel_list_fwd++;
+		rel_list_fwd = rel_list_fwd->next;
 		resend_packets(rel_list_fwd);
 	}
 	rel_t *rel_list_bwd = rel_list;
-	while (rel_list_bwd->prev) {
-		rel_list_bwd--;
+	while (rel_list_bwd->prev && *(rel_list_bwd->prev)) {
+		rel_list_bwd = *(rel_list_bwd->prev);
 		resend_packets(rel_list_bwd);
 	}
 }
