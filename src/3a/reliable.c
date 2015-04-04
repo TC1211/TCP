@@ -210,6 +210,7 @@ rel_read (rel_t *s)
 		}
 		if(bytes_read < 0){
 			s->eof_conn_input = 1;
+			bytes_read = 0;
 		}
 		packet_node->packet->cksum = 0;
 		int packet_length = DATA_PACKET_METADATA_LENGTH + bytes_read;
