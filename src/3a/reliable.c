@@ -170,7 +170,6 @@ int handle_ack(packet_list** list, struct ack_packet* ack_packet) {
 	packet_list* to_remove = *list;
 	while (to_remove && to_remove->packet->seqno <= ack_packet->ackno) {
 		remove_head_packet(&to_remove);
-		to_remove = to_remove->next;
 	}
 	return 0;
 }
