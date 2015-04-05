@@ -25,9 +25,9 @@ void print_packet_list(packet_list* list) {
 	printf("---------------------------\n");
 	while (list) {
 		printf("--------------\n");
-		printf("Seqno: %d\n", list->packet->seqno);
-		printf("Ackno: %d\n", list->packet->ackno);
-		printf("Length: %d\n", list->packet->len);
+		printf("Seqno: %d\n", ntohl(list->packet->seqno));
+		printf("Ackno: %d\n", ntohl(list->packet->ackno));
+		printf("Length: %d\n", ntohs(list->packet->len));
 		printf("Data: |%s|\n", list->packet->data);
 		printf("--------------\n");
 		list = list->next;
@@ -96,7 +96,7 @@ int insert_packet_after(packet_list** list, packet_list* packet) {
  */
 packet_list* get_packet_by_seqno(packet_list* list, unsigned int seqno) {
 	while (list) {
-		if (list->packet && list->packet->seqno == seqno) {
+		if (list->packet && ntohl(list->packet->seqno) == seqno) {
 			return list;
 		}
 		list = list->next;
@@ -132,7 +132,7 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 		*list = packet;
 		return 0;
 	}
-	if (get_packet_by_seqno(*list, packet->packet->seqno)) {
+	if (get_packet_by_seqno(*list, ntohl(packet->packet->seqno))) {
 		return 0;
 	}
 	packet_list* iter = *list;
@@ -144,7 +144,7 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 		if (!iter->packet) {
 			return -1;
 		}
-		if (packet->packet->seqno < iter->packet->seqno) {
+		if (ntohl(packet->packet->seqno) < ntohl(iter->packet->seqno)) {
 			break;
 		}
 		if (!iter->next) {
@@ -185,13 +185,13 @@ int last_consecutive_sequence_number(packet_list* list) {
 	if (!(list->packet)) {
 		return -1;
 	}
-	int last_seqno = list->packet->seqno;
+	int last_seqno = ntohl(list->packet->seqno);
 	list = list->next;
 	while (list) {
 		if (!(list->packet)) {
 			return -1;
 		}
-		if (list->packet->seqno == last_seqno + 1) {
+		if (ntohl(list->packet->seqno) == last_seqno + 1) {
 			last_seqno++;
 		}
 		else {
@@ -244,10 +244,10 @@ int packet_data_size(packet_list* list, int seqno_limit) {
 	int data_size = 0;
 	while (list) {
 		if (list->packet) {
-			if (seqno_limit != -1 && list->packet->seqno >= seqno_limit) {
+			if (seqno_limit != -1 && ntohl(list->packet->seqno) >= seqno_limit) {
 				break;
 			}
-			data_size += list->packet->len - DATA_PACKET_METADATA_LENGTH;
+			data_size += ntohs(list->packet->len) - DATA_PACKET_METADATA_LENGTH;
 		}
 		list = list->next;
 	}
@@ -269,10 +269,10 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 	int offset = 0;
 	while (list) {
 		if (list->packet) {
-			if (seqno_limit != -1 && list->packet->seqno >= seqno_limit) {
+			if (seqno_limit != -1 && ntohl(list->packet->seqno) >= seqno_limit) {
 				break;
 			}
-			uint16_t amountToCopy = list->packet->len - DATA_PACKET_METADATA_LENGTH;
+			uint16_t amountToCopy = ntohs(list->packet->len) - DATA_PACKET_METADATA_LENGTH;
 			size_t spaceLeft = size - (buffer_iter - buffer);
 			if (spaceLeft > 0 && spaceLeft < amountToCopy) {
 				amountToCopy = spaceLeft;
