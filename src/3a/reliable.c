@@ -156,6 +156,25 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 {
 }
 
+void enforce_destroy(rel_t* rel) {
+	if (rel->eof_other_side && rel->eof_conn_input &&
+		rel->eof_all_acked && rel->eof_conn_output) {
+		rel_destroy(rel);
+	}
+}
+
+int handle_ack(packet_list** list, struct ack_packet* ack_packet) {
+	if (!list || !(*list)) {
+		return -1;
+	}
+	packet_list* to_remove = *list;
+	while (to_remove && to_remove->packet->seqno <= ack_packet->ackno) {
+		remove_head_packet(&to_remove);
+		to_remove = to_remove->next;
+	}
+	return 0;
+}
+
 void send_ack(rel_t *r, uint32_t ackno) {
 	size_t ack_packet_size = sizeof(struct ack_packet);
 	struct ack_packet* ack = (struct ack_packet*) malloc(ack_packet_size);
@@ -181,31 +200,28 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	if (cksum(pkt, n)!=check)	return;
 	
 	if(n == 8){ // Ack only
-		packet_list* send_buffer_head = r->send_buffer; // this assume that the pointer directly points to the true head
-		while(send_buffer_head->packet->ackno != pkt->seqno && send_buffer_head !=NULL){
-			remove_head_packet(&send_buffer_head);
-		}
+		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
 	} 
 	else if (n >= 12 && pkt->seqno > 0){ //ack and data
-		insert_packet_in_order(&(r->receive_buffer), pkt->seqno);
-		if(pkt->seqno == r->next_seqno_expected){
-			r->next_seqno_expected++;
-			send_ack(r, r->next_seqno_expected);
+		packet_list* to_insert = new_packet();
+		memcpy(to_insert->packet, pkt, n);
+		insert_packet_in_order(&(r->receive_buffer), to_insert);
+
+		int next_seqno_candidate = last_consecutive_sequence_number(r->receive_buffer) + 1;
+		if (next_seqno_candidate > r->next_seqno_expected) {
+			r->next_seqno_expected = next_seqno_candidate;
 		}
 
-		packet_list* send_buffer_head = r->send_buffer; // piggy ack
-		while(send_buffer_head->packet->ackno < pkt->seqno && send_buffer_head !=NULL){
-			remove_head_packet(&send_buffer_head);
-		}
+		send_ack(r, r->next_seqno_expected - 1);
+
+		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
+
 		if(n == 12){
 			r->eof_other_side = 1;
 			if(r->next_seqno_to_send == pkt->ackno)	r->eof_all_acked = 1;
 		}
 	}
-	if (r->eof_other_side && r->eof_conn_input && 
-		r->eof_all_acked && r->eof_conn_output) {
-		rel_destroy(r);
-	}
+	enforce_destroy(r);
 	return;
 }
 
@@ -239,10 +255,7 @@ rel_read (rel_t *s)
 		conn_sendpkt(s->c, packet_node->packet, packet_length);
 		append_packet(&s->send_buffer, packet_node);
 	}
-	if (s->eof_other_side && s->eof_conn_input &&
-		s->eof_all_acked && s->eof_conn_output) {
-		rel_destroy(s);
-	}
+	enforce_destroy(s);
 }
 
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
@@ -271,11 +284,7 @@ void rel_output (rel_t *r) {
 		remove_head_packet(&r->receive_buffer);
 	}
 	r->eof_conn_output = 1;
-	if (r->eof_other_side && r->eof_conn_input &&
-		r->eof_all_acked && r->eof_conn_output) {
-		//there has to be a better way to do this
-		rel_destroy(r);
-	}
+	enforce_destroy(r);
 	return;
 }
 

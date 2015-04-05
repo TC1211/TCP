@@ -50,6 +50,52 @@ void test_get_by_seqno() {
 	assert(search->packet->ackno == 99);
 }
 
+void test_insert_packet_in_order() {
+	packet_list* packet_a = new_packet();
+	packet_a->packet->seqno = 1;
+	packet_list* packet_b = new_packet();
+	packet_b->packet->seqno = 2;
+	packet_list* packet_c = new_packet();
+	packet_c->packet->seqno = 3;
+
+	packet_list* list = NULL;
+	// test list is null
+	insert_packet_in_order(&list, packet_b);
+	// test inserting in front
+	insert_packet_in_order(&list, packet_a);
+	assert(packet_list_size(list) == 2);
+	assert(list->packet->seqno == 1);
+	assert(list->next->packet->seqno == 2);
+	// test inserting at end
+	insert_packet_in_order(&list, packet_c);
+	assert(packet_list_size(list) == 3);
+	assert(list->packet->seqno == 1);
+	assert(list->next->packet->seqno == 2);
+	assert(list->next->next->packet->seqno == 3);
+
+	packet_list* packet_x = new_packet();
+	packet_x->packet->seqno = 9;
+	packet_list* packet_y = new_packet();
+	packet_y->packet->seqno = 10;
+	packet_list* packet_z = new_packet();
+	packet_z->packet->seqno = 11;
+	list = packet_x;
+	assert(last_consecutive_sequence_number(list) == 9);
+	// test inserting at end, again
+	insert_packet_in_order(&list, packet_z);
+	assert(packet_list_size(list) == 2);
+	assert(list->packet->seqno == 9);
+	assert(list->next->packet->seqno == 11);
+	assert(last_consecutive_sequence_number(list) == 9);
+	// test inserting between two entries
+	insert_packet_in_order(&list, packet_y);
+	assert(packet_list_size(list) == 3);
+	assert(list->packet->seqno == 9);
+	assert(list->next->packet->seqno == 10);
+	assert(list->next->next->packet->seqno == 11);
+	assert(last_consecutive_sequence_number(list) == 11);
+}
+
 int main() {
 	packet_list* packet_a = new_packet();
 	packet_a->packet->seqno = 1;
@@ -117,4 +163,5 @@ int main() {
 
 	test_serialize();
 	test_get_by_seqno();
+	test_insert_packet_in_order();
 }

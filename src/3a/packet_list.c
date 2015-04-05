@@ -109,25 +109,83 @@ int insert_packet_after_seqno(
 }
 
 /**
- * Insertion sort of a packet
+ * Insert a packet into the list, preserving sequence number order
  */
-int insert_packet_in_order(packet_list** list, unsigned int seqno) {
-	if ( !list || !(*list)) {
+int insert_packet_in_order(packet_list** list, packet_list* packet) {
+	if (!list || !packet || !(packet->packet)) {
 		return -1;
 	}
-	packet_list* currentNode = *list;
-	packet_list* nextNode = (*list)->next;
-	while(nextNode!=NULL){ //search the list
-		if(currentNode->packet->seqno < seqno && nextNode->packet->seqno > seqno){
-			insert_packet_after(list, currentNode);;
+	if (!(*list)) {
+		*list = packet;
+		return 0;
+	}
+	packet_list* iter = *list;
+	if (!iter->packet) {
+		return -1;
+	}
+	packet_list* append_after = NULL;
+	while (iter) {
+		if (!iter->packet) {
+			return -1;
+		}
+		if (packet->packet->seqno <= iter->packet->seqno) {
 			break;
 		}
-		currentNode = currentNode->next;
-		nextNode = nextNode -> next;
+		if (!iter->next) {
+			append_after = iter;
+			break;
+		}
+		iter = iter->next;
 	}
-
-	return -1;
+	if (append_after) {
+		append_after->next = packet;
+		packet->prev = append_after;
+	}
+	else {
+		packet_list* old_prev = iter->prev;
+		iter->prev = packet;
+		packet->next = iter;
+		packet->prev = old_prev;
+		if (old_prev) {
+			old_prev->next = packet;
+		}
+		else {
+			*list = packet;
+		}
+	}
+	return 0;
 }
+
+/**
+ * Get the last consecutive sequence number in a list; if list is NULL, return 0,
+ * i.e. the sequence number 1 before the first legal sequence number
+ *
+ * Return -1 on error
+ */
+int last_consecutive_sequence_number(packet_list* list) {
+	if (!list) {
+		return 0;
+	}
+	if (!(list->packet)) {
+		return -1;
+	}
+	int last_seqno = list->packet->seqno;
+	list = list->next;
+	while (list) {
+		if (!(list->packet)) {
+			return -1;
+		}
+		if (list->packet->seqno == last_seqno + 1) {
+			last_seqno++;
+		}
+		else {
+			break;
+		}
+		list = list->next;
+	}
+	return last_seqno;
+}
+
 /**
  * Insert a packet at the end of the list; if the node pointed to in the list
  * is NULL, then initialize the list with that packet
