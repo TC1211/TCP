@@ -95,10 +95,21 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 		}
 	}
 	r->c = c;
-	r->next = rel_list;
-	r->prev = &rel_list;
-	if (rel_list)
-		rel_list->prev = &r->next;
+	// wtf / s > 1
+	//r->next = rel_list;
+	//r->prev = &rel_list;
+	//if (rel_list)
+	//	rel_list->prev = &r->next;
+	//rel_list = r;
+	// advance the list pointer forward
+	r->next = NULL;
+	if (rel_list) {
+		r->prev = &rel_list;
+		rel_list->next = r;
+	}
+	else {
+		r->prev = NULL;
+	}
 	rel_list = r;
 	/* Do any other initialization you need here */
 	r->send_buffer = NULL;
