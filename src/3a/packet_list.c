@@ -128,7 +128,10 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 		if (!iter->packet) {
 			return -1;
 		}
-		if (packet->packet->seqno <= iter->packet->seqno) {
+		if (packet->packet->seqno == iter->packet->seqno) {
+			return 0;
+		}
+		if (packet->packet->seqno < iter->packet->seqno) {
 			break;
 		}
 		if (!iter->next) {
