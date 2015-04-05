@@ -22,17 +22,17 @@ typedef struct packet_list {
 } packet_list;
 
 void print_packet_list(packet_list* list) {
-	printf("---------------------------\n");
+	fprintf(stderr, "---------------------------\n");
 	while (list) {
-		printf("--------------\n");
-		printf("Seqno: %d\n", ntohl(list->packet->seqno));
-		printf("Ackno: %d\n", ntohl(list->packet->ackno));
-		printf("Length: %d\n", ntohs(list->packet->len));
-		printf("Data: |%s|\n", list->packet->data);
-		printf("--------------\n");
+		fprintf(stderr, "--------------\n");
+		fprintf(stderr, "Seqno: %d\n", ntohl(list->packet->seqno));
+		fprintf(stderr, "Ackno: %d\n", ntohl(list->packet->ackno));
+		fprintf(stderr, "Length: %d\n", ntohs(list->packet->len));
+		fprintf(stderr, "Data: |%s|\n", list->packet->data);
+		fprintf(stderr, "--------------\n");
 		list = list->next;
 	}
-	printf("---------------------------\n");
+	fprintf(stderr, "---------------------------\n");
 }
 /**
  * Create a new, unlinked packet node

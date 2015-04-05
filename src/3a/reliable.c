@@ -75,11 +75,11 @@ struct reliable_state {
 rel_t *rel_list;
 
 void print_rel_state(rel_t* rel) {
-	printf("Next seqno to send: %d\n", rel->next_seqno_to_send);
-	printf("Next seqno expected: %d\n", rel->next_seqno_expected);
-	printf("Send buffer:\n");
+	fprintf(stderr, "Next seqno to send: %d\n", rel->next_seqno_to_send);
+	fprintf(stderr, "Next seqno expected: %d\n", rel->next_seqno_expected);
+	fprintf(stderr, "Send buffer:\n");
 	print_packet_list(rel->send_buffer);
-	printf("Receive buffer:\n");
+	fprintf(stderr, "Receive buffer:\n");
 	print_packet_list(rel->receive_buffer);
 }
 
@@ -204,8 +204,8 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
 #ifdef DEBUG
-	printf("\n");
-	printf("--- Start recvpkt -----------------------------\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "--- Start recvpkt -----------------------------\n");
 	print_rel_state(r);
 #endif
 	// first check validity
@@ -215,17 +215,17 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	
 	if(n == 8){ // Ack only
 #ifdef DEBUG
-		printf("ACK\n");
+		fprintf(stderr, "ACK\n");
 #endif
 		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
 		rel_read(r);
 	} 
-	else if (n >= 12 && ntohl(pkt->seqno) > 0){ //ack and data
+	else if (n >= 12 && ntohl(pkt->seqno) >= r->next_seqno_expected){ //ack and data
 		packet_list* to_insert = new_packet();
 		memcpy(to_insert->packet, pkt, n);
 #ifdef DEBUG
-		printf("DATA\n");
-		printf("TO INSERT:\n");
+		fprintf(stderr, "DATA\n");
+		fprintf(stderr, "TO INSERT:\n");
 		print_packet_list(to_insert);
 #endif
 		insert_packet_in_order(&(r->receive_buffer), to_insert);
@@ -250,9 +250,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	}
 	enforce_destroy(r);
 #ifdef DEBUG
-	printf("--- End recvpkt -------------------------------\n");
+	fprintf(stderr, "--- End recvpkt -------------------------------\n");
 	print_rel_state(r);
-	printf("\n");
+	fprintf(stderr, "\n");
 #endif
 	return;
 }
@@ -261,8 +261,8 @@ void
 rel_read (rel_t *s)
 {
 #ifdef DEBUG
-	printf("\n");
-	printf("--- Start read --------------------------------\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "--- Start read --------------------------------\n");
 	print_rel_state(s);
 #endif
 	if (!s) {
@@ -295,9 +295,9 @@ rel_read (rel_t *s)
 	}
 	enforce_destroy(s);
 #ifdef DEBUG
-	printf("--- End read ----------------------------------\n");
+	fprintf(stderr, "--- End read ----------------------------------\n");
 	print_rel_state(s);
-	printf("\n");
+	fprintf(stderr, "\n");
 #endif
 }
 
@@ -305,14 +305,14 @@ rel_read (rel_t *s)
 // you can flush, and flush using conn_output
 void rel_output (rel_t *r) {
 #ifdef DEBUG
-	printf("\n");
-	printf("--- Start output ------------------------------\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "--- Start output ------------------------------\n");
 	print_rel_state(r);
 #endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
 	if (check == 0) {
-		printf("Not enough space in output\n");
+		fprintf(stderr, "Not enough space in output\n");
 		return;
 	}
 	size_t size = (size_t) (check < total) ? check : total;
@@ -334,9 +334,9 @@ void rel_output (rel_t *r) {
 	r->eof_conn_output = 1;
 	enforce_destroy(r);
 #ifdef DEBUG
-	printf("--- End output --------------------------------\n");
+	fprintf(stderr, "--- End output --------------------------------\n");
 	print_rel_state(r);
-	printf("\n");
+	fprintf(stderr, "\n");
 #endif
 	return;
 }
@@ -344,6 +344,9 @@ void rel_output (rel_t *r) {
 void resend_packets(rel_t *rel) {
 	packet_list* packets_iter = rel->send_buffer;
 	while (packets_iter && packets_iter->packet) {
+#ifdef DEBUG
+		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
+#endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
