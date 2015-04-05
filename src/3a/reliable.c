@@ -17,6 +17,8 @@
 #include "packet_list.c"
 #include "constants.h"
 
+#undef DEBUG
+
 // TODO:
 // - multiple connections
 
@@ -71,6 +73,15 @@ struct reliable_state {
 	uint8_t eof_conn_output;
 };
 rel_t *rel_list;
+
+void print_rel_state(rel_t* rel) {
+	printf("Next seqno to send: %d\n", rel->next_seqno_to_send);
+	printf("Next seqno expected: %d\n", rel->next_seqno_expected);
+	printf("Send buffer:\n");
+	print_packet_list(rel->send_buffer);
+	printf("Receive buffer:\n");
+	print_packet_list(rel->receive_buffer);
+}
 
 /* Creates a new reliable protocol session, returns NULL on failure.
 * Exactly one of c and ss should be NULL. (ss is NULL when called
@@ -167,9 +178,8 @@ int handle_ack(packet_list** list, struct ack_packet* ack_packet) {
 	if (!list || !(*list)) {
 		return -1;
 	}
-	packet_list* to_remove = *list;
-	while (to_remove && to_remove->packet->seqno <= ack_packet->ackno) {
-		remove_head_packet(&to_remove);
+	while (*list && (*list)->packet->seqno <= ack_packet->ackno) {
+		remove_head_packet(list);
 	}
 	return 0;
 }
@@ -193,23 +203,39 @@ void send_ack(rel_t *r, uint32_t ackno) {
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
+#ifdef DEBUG
+	printf("\n");
+	printf("--- Start recvpkt -----------------------------\n");
+	print_rel_state(r);
+#endif
 	// first check validity
 	unsigned int check = pkt->cksum;
 	pkt->cksum = 0;
 	if (cksum(pkt, n)!=check)	return;
 	
 	if(n == 8){ // Ack only
+#ifdef DEBUG
+		printf("ACK\n");
+#endif
 		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
+		rel_read(r);
 	} 
 	else if (n >= 12 && pkt->seqno > 0){ //ack and data
 		packet_list* to_insert = new_packet();
 		memcpy(to_insert->packet, pkt, n);
+#ifdef DEBUG
+		printf("DATA\n");
+		printf("TO INSERT:\n");
+		print_packet_list(to_insert);
+#endif
 		insert_packet_in_order(&(r->receive_buffer), to_insert);
 
 		int next_seqno_candidate = last_consecutive_sequence_number(r->receive_buffer) + 1;
 		if (next_seqno_candidate > r->next_seqno_expected) {
 			r->next_seqno_expected = next_seqno_candidate;
 		}
+		// HACKS!??
+		rel_output(r);
 
 		send_ack(r, r->next_seqno_expected - 1);
 
@@ -221,20 +247,31 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		}
 	}
 	enforce_destroy(r);
+#ifdef DEBUG
+	printf("--- End recvpkt -------------------------------\n");
+	print_rel_state(r);
+	printf("\n");
+#endif
 	return;
 }
 
 void
 rel_read (rel_t *s)
 {
+#ifdef DEBUG
+	printf("\n");
+	printf("--- Start read --------------------------------\n");
+	print_rel_state(s);
+#endif
 	if (!s) {
 		return;
 	}
 	packet_list* send_buffer = s->send_buffer;
 	int window_size = s->config->window;
-	while (packet_list_size(send_buffer) < window_size) {
+	int bytes_read = 1;
+	while (packet_list_size(send_buffer) < window_size && bytes_read > 0) {
 		packet_list* packet_node = new_packet();
-		int bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
+		bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
 		if (bytes_read == 0) {
 			break;
 		}
@@ -255,11 +292,21 @@ rel_read (rel_t *s)
 		append_packet(&s->send_buffer, packet_node);
 	}
 	enforce_destroy(s);
+#ifdef DEBUG
+	printf("--- End read ----------------------------------\n");
+	print_rel_state(s);
+	printf("\n");
+#endif
 }
 
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 void rel_output (rel_t *r) {
+#ifdef DEBUG
+	printf("\n");
+	printf("--- Start output ------------------------------\n");
+	print_rel_state(r);
+#endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
 	if (check == 0) {
@@ -284,6 +331,11 @@ void rel_output (rel_t *r) {
 	}
 	r->eof_conn_output = 1;
 	enforce_destroy(r);
+#ifdef DEBUG
+	printf("--- End output --------------------------------\n");
+	print_rel_state(r);
+	printf("\n");
+#endif
 	return;
 }
 
@@ -300,6 +352,7 @@ void
 rel_timer ()
 {
 	/* Retransmit any packets that need to be retransmitted */
+	/*
 	if (rel_list) {
 		resend_packets(rel_list);
 	}
@@ -313,4 +366,5 @@ rel_timer ()
 		rel_list_bwd = *(rel_list_bwd->prev);
 		resend_packets(rel_list_bwd);
 	}
+	*/
 }

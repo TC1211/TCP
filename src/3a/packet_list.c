@@ -21,6 +21,19 @@ typedef struct packet_list {
 	packet_t *packet;
 } packet_list;
 
+void print_packet_list(packet_list* list) {
+	printf("---------------------------\n");
+	while (list) {
+		printf("--------------\n");
+		printf("Seqno: %d\n", list->packet->seqno);
+		printf("Ackno: %d\n", list->packet->ackno);
+		printf("Length: %d\n", list->packet->len);
+		printf("Data: |%s|\n", list->packet->data);
+		printf("--------------\n");
+		list = list->next;
+	}
+	printf("---------------------------\n");
+}
 /**
  * Create a new, unlinked packet node
  */
@@ -119,6 +132,9 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 		*list = packet;
 		return 0;
 	}
+	if (get_packet_by_seqno(*list, packet->packet->seqno)) {
+		return 0;
+	}
 	packet_list* iter = *list;
 	if (!iter->packet) {
 		return -1;
@@ -127,9 +143,6 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 	while (iter) {
 		if (!iter->packet) {
 			return -1;
-		}
-		if (packet->packet->seqno == iter->packet->seqno) {
-			return 0;
 		}
 		if (packet->packet->seqno < iter->packet->seqno) {
 			break;
