@@ -220,7 +220,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
 		rel_read(r);
 	} 
-	else if (n >= 12 && ntohl(pkt->seqno) >= r->next_seqno_expected){ //ack and data
+	else if (n > 12 && ntohl(pkt->seqno) >= r->next_seqno_expected){ //ack and data
 		packet_list* to_insert = new_packet();
 		memcpy(to_insert->packet, pkt, n);
 #ifdef DEBUG
@@ -240,12 +240,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		send_ack(r, r->next_seqno_expected - 1);
 
 		handle_ack(&r->send_buffer, (struct ack_packet*) pkt);
-
-		if(n == 12){
-			r->eof_other_side = 1;
-			if(r->next_seqno_to_send == ntohl(pkt->ackno)) {
-				r->eof_all_acked = 1;
-			}
+	}
+	else if (n == 12){
+		r->eof_other_side = 1;
+		if(r->next_seqno_to_send == ntohl(pkt->ackno)) {
+			r->eof_all_acked = 1;
 		}
 	}
 	enforce_destroy(r);
@@ -357,7 +356,6 @@ void
 rel_timer ()
 {
 	/* Retransmit any packets that need to be retransmitted */
-	/*
 	if (rel_list) {
 		resend_packets(rel_list);
 	}
@@ -371,5 +369,4 @@ rel_timer ()
 		rel_list_bwd = *(rel_list_bwd->prev);
 		resend_packets(rel_list_bwd);
 	}
-	*/
 }
