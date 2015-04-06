@@ -144,13 +144,15 @@ int insert_packet_in_order(packet_list** list, packet_list* packet) {
 		if (!iter->packet) {
 			return -1;
 		}
-		if (ntohl(packet->packet->seqno) < ntohl(iter->packet->seqno)) {
-			break;
-		}
-		if (!iter->next) {
+		if (ntohl(packet->packet->seqno) > ntohl(iter->packet->seqno)) {
 			append_after = iter;
 			break;
 		}
+
+		if (ntohl(packet->packet->seqno) < ntohl(iter->packet->seqno)) {
+			break;
+		}
+		
 		iter = iter->next;
 	}
 	if (append_after) {
