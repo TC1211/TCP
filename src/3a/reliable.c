@@ -265,12 +265,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		}
 	}
 	enforce_destroy(r);
-/*
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
 	print_rel_state(r);
 	fprintf(stderr, "\n");
-#endif*/
+#endif
 	return;
 }
 
@@ -288,7 +287,7 @@ rel_read (rel_t *s)
 	packet_list* send_buffer = s->send_buffer;
 	int window_size = s->config->window;
 	int bytes_read = 1;
-	while (packet_list_size(send_buffer) <= window_size && bytes_read > 0) {
+	while (packet_list_size(send_buffer) < window_size && bytes_read > 0) {
 		packet_list* packet_node = new_packet();
 		bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
 		if (bytes_read == 0) {
@@ -321,12 +320,11 @@ rel_read (rel_t *s)
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 void rel_output (rel_t *r) {
-/*
 #ifdef DEBUG
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start output ------------------------------\n");
 	print_rel_state(r);
-#endif*/
+#endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
 	if (check == 0) {
@@ -351,22 +349,20 @@ void rel_output (rel_t *r) {
 	}
 	r->eof_conn_output = 1;
 	enforce_destroy(r);
-/*
 #ifdef DEBUG
 	fprintf(stderr, "--- End output --------------------------------\n");
 	print_rel_state(r);
 	fprintf(stderr, "\n");
-#endif*/
+#endif
 	return;
 }
 
 void resend_packets(rel_t *rel) {
 	packet_list* packets_iter = rel->send_buffer;
 	while (packets_iter && packets_iter->packet) {
-/*
 #ifdef DEBUG
 		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
-#endif*/
+#endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
