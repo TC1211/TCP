@@ -21,19 +21,6 @@ typedef struct packet_list {
 	packet_t *packet;
 } packet_list;
 
-void print_packet_list(packet_list* list) {
-	fprintf(stderr, "---------------------------\n");
-	while (list) {
-		fprintf(stderr, "--------------\n");
-		fprintf(stderr, "Seqno: %d\n", ntohl(list->packet->seqno));
-		fprintf(stderr, "Ackno: %d\n", ntohl(list->packet->ackno));
-		fprintf(stderr, "Length: %d\n", ntohs(list->packet->len));
-		fprintf(stderr, "Data: |%s|\n", list->packet->data);
-		fprintf(stderr, "--------------\n");
-		list = list->next;
-	}
-	fprintf(stderr, "---------------------------\n");
-}
 /**
  * Create a new, unlinked packet node
  */
@@ -281,8 +268,10 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 			else if (spaceLeft <= 0) {
 				break;
 			}
-			memcpy(buffer_iter, list->packet->data, amountToCopy);
-			buffer_iter += amountToCopy;
+			if (amountToCopy > 0) {
+				memcpy(buffer_iter, list->packet->data, amountToCopy);
+				buffer_iter += amountToCopy;
+			}
 		}
 		list = list->next;
 		packet_count++;
@@ -293,4 +282,22 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 	if (last_packet_offset) {
 		*last_packet_offset = offset;
 	}
+}
+
+void print_packet_list(packet_list* list) {
+	fprintf(stderr, "---------------------------\n");
+	fprintf(stderr, "List size: %d\n", packet_list_size(list));
+	fprintf(stderr, "Last consecutive seqno: %d\n", last_consecutive_sequence_number(list));
+	/*
+	while (list) {
+		fprintf(stderr, "--------------\n");
+		fprintf(stderr, "Seqno: %d\n", ntohl(list->packet->seqno));
+		fprintf(stderr, "Ackno: %d\n", ntohl(list->packet->ackno));
+		fprintf(stderr, "Length: %d\n", ntohs(list->packet->len));
+		fprintf(stderr, "Data: |%s|\n", list->packet->data);
+		fprintf(stderr, "--------------\n");
+		list = list->next;
+	}
+	*/
+	fprintf(stderr, "---------------------------\n");
 }
