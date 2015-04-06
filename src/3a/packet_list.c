@@ -285,7 +285,7 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 }
 
 void print_packet_list(packet_list* list) {
-	fprintf(stderr, "---------------------------\n");
+	//fprintf(stderr, "---------------------------\n");
 	fprintf(stderr, "List size: %d\n", packet_list_size(list));
 	fprintf(stderr, "Last consecutive seqno: %d\n", last_consecutive_sequence_number(list));
 	/*
@@ -299,5 +299,5 @@ void print_packet_list(packet_list* list) {
 		list = list->next;
 	}
 	*/
-	fprintf(stderr, "---------------------------\n");
+	//fprintf(stderr, "---------------------------\n");
 }

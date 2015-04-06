@@ -108,11 +108,13 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	}
 	r->c = c;
 	// wtf / s > 1
-	//r->next = rel_list;
-	//r->prev = &rel_list;
-	//if (rel_list)
-	//	rel_list->prev = &r->next;
-	//rel_list = r;
+	/*
+	r->next = rel_list;
+	r->prev = &rel_list;
+	if (rel_list)
+		rel_list->prev = &r->next;
+	rel_list = r;
+	*/
 	// advance the list pointer forward
 	r->next = NULL;
 	if (rel_list) {
@@ -172,6 +174,9 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 void enforce_destroy(rel_t* rel) {
 	if (rel->eof_other_side && rel->eof_conn_input &&
 		rel->eof_all_acked && rel->eof_conn_output) {
+#ifdef DEBUG
+		fprintf(stderr, "DESTROYING\n");
+#endif
 		rel_destroy(rel);
 	}
 }
@@ -180,17 +185,27 @@ int handle_ack(rel_t* rel, struct ack_packet* ack_packet) {
 	if (!rel) {
 		return -1;
 	}
+#ifdef DEBUG
+	fprintf(stderr, "RECEIVE ACK %d\n", ntohl(ack_packet->ackno));
+#endif
 	if (ntohl(ack_packet->ackno) > rel->final_seqno) {
 		rel->eof_all_acked = 1;
+#ifdef DEBUG
+	fprintf(stderr, "All sent are acked\n");
+#endif
 	}
 	while (rel->send_buffer
 			&& ntohl(rel->send_buffer->packet->seqno) < ntohl(ack_packet->ackno)) {
 		remove_head_packet(&rel->send_buffer);
 	}
+	//assert(ntohl(rel->send_buffer->packet->seqno) >= ntohl(ack_packet->ackno));
 	return 0;
 }
 
 void send_ack(rel_t *r, uint32_t ackno) {
+#ifdef DEBUG
+	fprintf(stderr, "SEND ACK %d\n", ackno);
+#endif
 	size_t ack_packet_size = sizeof(struct ack_packet);
 	struct ack_packet* ack = (struct ack_packet*) malloc(ack_packet_size);
 	memset(ack, 0, ack_packet_size);
@@ -198,6 +213,9 @@ void send_ack(rel_t *r, uint32_t ackno) {
 	ack->ackno = htonl(ackno);
 	ack->cksum = cksum((void *)ack, ack_packet_size);
 	conn_sendpkt(r->c, (packet_t *)ack, ack_packet_size);
+	//assert(sent == 8);
+	//assert(ntohs(ack->len) == 8);
+	//assert(ntohl(ack->ackno) == ackno);
 	free(ack);
 	return;
 }
@@ -224,8 +242,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start recvpkt -----------------------------\n");
 	print_rel_state(r);
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 	int packet_length = ntohs(pkt->len);
+	//assert(packet_length == n);
 	// checksum
 	unsigned int check = pkt->cksum;
 	pkt->cksum = 0;
@@ -237,22 +257,17 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	//printf("recv len: %u calc len:%u n:%u\n", ntohs(pkt->len), (uint16_t)check_pkt_data_len(pkt->data), (uint16_t)n);
 	
 	if(packet_length == 8){ // Ack only
-#ifdef DEBUG
-		fprintf(stderr, "ACK\n");
-#endif
 		handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
 	else if (packet_length >= 12 && (ntohl(pkt->seqno) >= r->next_seqno_expected)){ //ack and data
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
+#ifdef DEBUG
+		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
+#endif
 		packet_list* to_insert = new_packet();
 		memcpy(to_insert->packet, pkt, packet_length);
 
-#ifdef DEBUG
-		fprintf(stderr, "DATA\n");
-		fprintf(stderr, "TO INSERT:\n");
-		print_packet_list(to_insert);
-#endif
 		insert_packet_in_order(&(r->receive_buffer), to_insert);
 
 		int next_seqno_candidate = last_consecutive_sequence_number(r->receive_buffer) + 1;
@@ -264,6 +279,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		handle_ack(r, (struct ack_packet*) pkt);
 
 		if (packet_length == 12) {
+#ifdef DEBUG
+			fprintf(stderr, "RECEIVE EOF PACKET\n");
+#endif
 			r->eof_other_side = 1;
 		}
 		rel_output(r);
@@ -272,7 +290,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
 	print_rel_state(r);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 	return;
 }
@@ -284,6 +302,7 @@ rel_read (rel_t *s)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start read --------------------------------\n");
 	print_rel_state(s);
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 	if (!s) {
 		return;
@@ -322,7 +341,7 @@ rel_read (rel_t *s)
 #ifdef DEBUG
 	fprintf(stderr, "--- End read ----------------------------------\n");
 	print_rel_state(s);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 }
 
@@ -333,6 +352,7 @@ void rel_output (rel_t *r) {
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start output ------------------------------\n");
 	print_rel_state(r);
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
@@ -366,17 +386,26 @@ void rel_output (rel_t *r) {
 #ifdef DEBUG
 	fprintf(stderr, "--- End output --------------------------------\n");
 	print_rel_state(r);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "-----------------------------------------------\n");
 #endif
 	return;
 }
 
 void resend_packets(rel_t *rel) {
+/*
+#ifdef DEBUG
+	fprintf(stderr, "--- Resending packets -------------------------\n");
+	print_rel_state(rel);
+	fprintf(stderr, "-----------------------------------------------\n");
+#endif
+*/
 	packet_list* packets_iter = rel->send_buffer;
 	while (packets_iter && packets_iter->packet) {
+/*
 #ifdef DEBUG
 		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
 #endif
+*/
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
