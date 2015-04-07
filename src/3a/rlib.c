@@ -193,6 +193,9 @@ conn_output (conn_t *c, const void *_buf, size_t _n)
 
 
 	if (n == 0) {
+#ifdef LIBDEBUG
+        fprintf(stderr, "c->write_eof = 1 \n");
+#endif
 		c->write_eof = 1;
 		if (!c->outq)
 			shutdown (c->wfd, SHUT_WR);

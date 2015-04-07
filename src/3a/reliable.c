@@ -160,7 +160,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 void
 rel_destroy (rel_t *r)
 {
-	if (r->next)
+    if (r->next)
 	r->next->prev = r->prev;
 	*r->prev = r->next;
 	conn_destroy (r->c);
@@ -192,9 +192,9 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 void enforce_destroy(rel_t* rel) {
 	if (rel->eof_other_side && rel->eof_conn_input &&
 		rel->eof_all_acked && rel->eof_conn_output) {
-#ifdef DEBUG
+        
 		fprintf(stderr, "DESTROYING\n");
-#endif
+
 		rel_destroy(rel);
 	}
 }
