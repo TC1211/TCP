@@ -19,6 +19,9 @@
 
 #include "rlib.h"
 
+#define LIBDEBUG
+
+
 char *progname;
 int opt_debug;
 int log_in = -1;
@@ -180,6 +183,10 @@ conn_output (conn_t *c, const void *_buf, size_t _n)
 	int n = _n;
 
 	//assert (!c->delete_me && !c->write_eof);
+#ifdef LIBDEBUG
+    fprintf(stderr, "!delete_me %d\n", !c->delete_me);
+    fprintf(stderr, "!write_eof %d\n", !c->write_eof);
+#endif
 
 	if (n == 0) {
 		c->write_eof = 1;
