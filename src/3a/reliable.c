@@ -379,7 +379,7 @@ void rel_output (rel_t *r) {
 #endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
-	if (check == 0) {
+	if (check == 0 || total == 0) {
 		fprintf(stderr, "Not enough space in output\n");
 		return;
 	}
@@ -392,7 +392,7 @@ void rel_output (rel_t *r) {
 			&packets_written, &last_packet_offset);
 
     if (size == 0) {
-     fprintf(stderr, "SIZE IS ZERO\n");   
+        fprintf(stderr, "SIZE IS ZERO\n");
     }
 
 	conn_output(r->c, buf, (int) size);
