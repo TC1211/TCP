@@ -179,7 +179,7 @@ conn_output (conn_t *c, const void *_buf, size_t _n)
 	const char *buf = _buf;
 	int n = _n;
 
-	assert (!c->delete_me && !c->write_eof);
+	//assert (!c->delete_me && !c->write_eof);
 
 	if (n == 0) {
 		c->write_eof = 1;
