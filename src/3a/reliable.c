@@ -75,13 +75,31 @@ struct reliable_state {
 };
 rel_t *rel_list;
 
-void print_rel_state(rel_t* rel) {
-	fprintf(stderr, "Next seqno to send: %d\n", rel->next_seqno_to_send);
-	fprintf(stderr, "Next seqno expected: %d\n", rel->next_seqno_expected);
-	fprintf(stderr, "Send buffer:\n");
-	print_packet_list(rel->send_buffer);
-	fprintf(stderr, "Receive buffer:\n");
-	print_packet_list(rel->receive_buffer);
+void print_rel_state(rel_t* rel, int indent_level) {
+	char indents[indent_level + 1];
+	if (indent_level > 0) {
+		int i;
+		for (i = 0; i < indent_level; i++) {
+			indents[i] = '\t';
+		}
+		indents[indent_level] = 0;
+	}
+	else {
+		indents[0] = 0;
+	}
+	fprintf(stderr, "%sNext seqno to send: %d\n", indents, rel->next_seqno_to_send);
+	fprintf(stderr, "%sFinal seqno: %d\n", indents, rel->final_seqno);
+	fprintf(stderr, "%sSend buffer:\n", indents);
+	print_packet_list(rel->send_buffer, 2);
+	fprintf(stderr, "%sNext seqno expected: %d\n", indents, rel->next_seqno_expected);
+	fprintf(stderr, "%sReceive buffer:\n", indents);
+	print_packet_list(rel->receive_buffer, 2);
+	fprintf(stderr, "%sEOF flags: %d, %d, %d, %d\n", indents,
+			rel->eof_other_side,
+			rel->eof_conn_input,
+			rel->eof_all_acked,
+			rel->eof_conn_output
+			);
 }
 
 /* Creates a new reliable protocol session, returns NULL on failure.
@@ -241,8 +259,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 #ifdef DEBUG
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start recvpkt -----------------------------\n");
-	print_rel_state(r);
+	print_rel_state(r, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 	int packet_length = ntohs(pkt->len);
 	//assert(packet_length == n);
@@ -289,8 +308,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	//enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
-	print_rel_state(r);
+	print_rel_state(r, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 	return;
 }
@@ -301,8 +321,9 @@ rel_read (rel_t *s)
 #ifdef DEBUG
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start read --------------------------------\n");
-	print_rel_state(s);
+	print_rel_state(s, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 	if (!s) {
 		return;
@@ -340,8 +361,9 @@ rel_read (rel_t *s)
 	//enforce_destroy(s);
 #ifdef DEBUG
 	fprintf(stderr, "--- End read ----------------------------------\n");
-	print_rel_state(s);
+	print_rel_state(s, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 }
 
@@ -351,8 +373,9 @@ void rel_output (rel_t *r) {
 #ifdef DEBUG
 	fprintf(stderr, "\n");
 	fprintf(stderr, "--- Start output ------------------------------\n");
-	print_rel_state(r);
+	print_rel_state(r, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
@@ -385,8 +408,9 @@ void rel_output (rel_t *r) {
 	enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End output --------------------------------\n");
-	print_rel_state(r);
+	print_rel_state(r, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
+	fprintf(stderr, "\n");
 #endif
 	return;
 }

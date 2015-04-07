@@ -284,10 +284,21 @@ void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_li
 	}
 }
 
-void print_packet_list(packet_list* list) {
+void print_packet_list(packet_list* list, int indent_level) {
+	char indents[indent_level + 1];
+	if (indent_level > 0) {
+		int i;
+		for (i = 0; i < indent_level; i++) {
+			indents[i] = '\t';
+		}
+		indents[indent_level] = 0;
+	}
+	else {
+		indents[0] = 0;
+	}
 	//fprintf(stderr, "---------------------------\n");
-	fprintf(stderr, "List size: %d\n", packet_list_size(list));
-	fprintf(stderr, "Last consecutive seqno: %d\n", last_consecutive_sequence_number(list));
+	fprintf(stderr, "%sList size: %d\n", indents, packet_list_size(list));
+	fprintf(stderr, "%sLast consecutive seqno: %d\n", indents, last_consecutive_sequence_number(list));
 	/*
 	while (list) {
 		fprintf(stderr, "--------------\n");
