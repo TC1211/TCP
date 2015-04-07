@@ -391,6 +391,10 @@ void rel_output (rel_t *r) {
 	serialize_packet_data(buf, size, r->next_seqno_expected, list,
 			&packets_written, &last_packet_offset);
 
+    if (size == 0) {
+     fprintf(stderr, "SIZE IS ZERO\n");   
+    }
+
 	conn_output(r->c, buf, (int) size);
 	if (last_packet_offset != 0) {
 		packets_written--;
