@@ -181,14 +181,16 @@ conn_output (conn_t *c, const void *_buf, size_t _n)
 {
 	const char *buf = _buf;
 	int n = _n;
-
-	//assert (!c->delete_me && !c->write_eof);
+    
 #ifdef LIBDEBUG
     if (!(!c->delete_me && !c->write_eof)) {
         fprintf(stderr, "!delete_me %d\n", !c->delete_me);
         fprintf(stderr, "!write_eof %d\n", !c->write_eof);
     }
 #endif
+    
+	assert (!c->delete_me && !c->write_eof);
+
 
 	if (n == 0) {
 		c->write_eof = 1;
