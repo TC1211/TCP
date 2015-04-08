@@ -238,6 +238,12 @@ void print_packet_list(packet_list* list, int indent_level) {
 	//fprintf(stderr, "---------------------------\n");
 	fprintf(stderr, "%sList size: %d\n", indents, packet_list_size(list));
 	fprintf(stderr, "%sLast consecutive seqno: %d\n", indents, last_consecutive_sequence_number(list));
+	fprintf(stderr, "%sSeqnos: | ", indents);
+	while (list) {
+		fprintf(stderr, "%d, ", ntohl(list->packet->seqno));
+		list = list->next;
+	}
+	fprintf(stderr, "|\n");
 	/*
 	while (list) {
 		fprintf(stderr, "--------------\n");
