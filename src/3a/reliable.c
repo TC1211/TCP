@@ -330,7 +330,8 @@ rel_read (rel_t *s)
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
-	if (!s) {
+	if (!s
+			|| s->eof_conn_input) {
 		return;
 	}
 	int window_size = s->config->window;
