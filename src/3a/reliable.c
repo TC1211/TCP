@@ -61,6 +61,7 @@ struct reliable_state {
 	 * the receive buffer
 	 */
 	unsigned int next_seqno_expected;
+	size_t receive_buffer_data_offset;
 
 	/**
 	 * The configuration parameters passed from the user
@@ -149,6 +150,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 	r->final_seqno = -1;
 	r->receive_buffer = NULL;
 	r->next_seqno_expected = 1;
+	r->receive_buffer_data_offset = 0;
 	r->config = cc;
 	r->eof_other_side = 0;
 	r->eof_conn_input = 0;
@@ -367,6 +369,31 @@ rel_read (rel_t *s)
 #endif
 }
 
+bool is_eof_packet(packet_t* packet) {
+	if (!packet) {
+		return false;
+	}
+	if (ntohs(packet->len) == 12) {
+		return true;
+	}
+	return false;
+}
+
+bool handle_eof_packet(rel_t* rel) {
+	if (!rel
+			|| !(rel->receive_buffer)
+			|| !(rel->receive_buffer->packet)) {
+		return false;
+	}
+	if (is_eof_packet(rel->receive_buffer->packet)) {
+		conn_output(rel->c, NULL, 0);
+		rel->eof_conn_output = 1;
+		enforce_destroy(rel);
+		return true;
+	}
+	return false;
+}
+
 // Consume the packets buffered by rel_recvpkt; call conn_bufspace to see how much data
 // you can flush, and flush using conn_output
 void rel_output (rel_t *r) {
@@ -377,42 +404,43 @@ void rel_output (rel_t *r) {
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
-	int check = conn_bufspace(r->c);
-	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
-	if (check == 0) {
-		fprintf(stderr, "Not enough space in output\n");
+	if (r->eof_conn_output) {
 		return;
 	}
-	size_t size = (size_t) (check < total) ? check : total;
-	char *buf = malloc(size);
-	packet_list *list = r->receive_buffer;
-	int packets_written;
-	int last_packet_offset;
-	serialize_packet_data(buf, size, r->next_seqno_expected, list,
-			&packets_written, &last_packet_offset);
-
-	conn_output(r->c, buf, (int) size);
-	if (last_packet_offset != 0) {
-		packets_written--;
+	int bufspace = conn_bufspace(r->c);
+	int data_written = 0;
+	while (data_written < bufspace
+			&& r->receive_buffer
+			&& r->receive_buffer->packet
+			&& !(handle_eof_packet(r))
+			&& r->receive_buffer->packet->data) {
+		int to_write = ntohs(r->receive_buffer->packet->len)
+				- DATA_PACKET_METADATA_LENGTH
+				- r->receive_buffer_data_offset;
+		if (to_write <= 0) {
+			break;
+		}
+		bool truncated = false;
+		if (data_written + to_write > bufspace) {
+			to_write = bufspace - data_written;
+			truncated = true;
+		}
+		char* start_of_data = r->receive_buffer->packet->data + r->receive_buffer_data_offset;
+		conn_output(r->c, start_of_data, to_write);
+		if (truncated) {
+			r->receive_buffer_data_offset += to_write;
+		}
+		else {
+			remove_head_packet(&r->receive_buffer);
+		}
+		data_written += to_write;
 	}
-	int i = 0;
-	for (i = 0; i < packets_written; i++) {
-		remove_head_packet(&(r->receive_buffer));
-	}
-	if (packet_list_size(r->receive_buffer) == 0) {
-		r->eof_conn_output = 1;
-	}
-	else {
-		r->eof_conn_output = 0;
-	}
-	enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End output --------------------------------\n");
 	print_rel_state(r, 1);
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
-	return;
 }
 
 void resend_packets(rel_t *rel) {
