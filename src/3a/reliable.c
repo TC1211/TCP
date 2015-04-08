@@ -162,7 +162,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss, const struct config_co
 void
 rel_destroy (rel_t *r)
 {
-	if (r->next)
+    if (r->next)
 	r->next->prev = r->prev;
 	*r->prev = r->next;
 	conn_destroy (r->c);
@@ -194,9 +194,9 @@ rel_demux (const struct config_common *cc, const struct sockaddr_storage *ss, pa
 void enforce_destroy(rel_t* rel) {
 	if (rel->eof_other_side && rel->eof_conn_input &&
 		rel->eof_all_acked && rel->eof_conn_output) {
-#ifdef DEBUG
+        
 		fprintf(stderr, "DESTROYING\n");
-#endif
+
 		rel_destroy(rel);
 	}
 }
@@ -300,9 +300,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		handle_ack(r, (struct ack_packet*) pkt);
 
 		if (packet_length == 12) {
-#ifdef DEBUG
+//#ifdef DEBUG
 			fprintf(stderr, "RECEIVE EOF PACKET\n");
-#endif
+//#endif
 			r->eof_other_side = 1;
 		}
 		rel_output(r);
@@ -339,7 +339,7 @@ rel_read (rel_t *s)
 			break;
 		}
 		if(bytes_read < 0){
-			should_break = 1;
+			should_break = 1; //need to send eof
 			s->eof_conn_input = 1;
 			s->final_seqno = s->next_seqno_to_send;
 			bytes_read = 0;
