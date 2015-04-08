@@ -223,67 +223,6 @@ int packet_list_size(packet_list* list) {
 	return packet_list_size_acc(list, 0);
 }
 
-/**
- * Get the size of the data in the packets, up to a certain sequence number
- * or for the entire list if seqno_limit is set to -1.
- */
-int packet_data_size(packet_list* list, int seqno_limit) {
-	int data_size = 0;
-	while (list) {
-		if (list->packet) {
-			if (seqno_limit != -1 && ntohl(list->packet->seqno) >= seqno_limit) {
-				break;
-			}
-			data_size += ntohs(list->packet->len) - DATA_PACKET_METADATA_LENGTH;
-		}
-		list = list->next;
-	}
-	return data_size;
-}
-
-/**
- * Write out size bytes of data to the buffer from the packet list
- * and return the number of packets written and the byte offset
- * of the last packet written
- *
- * If a packet with seqno_limit or higher sequence number is reached,
- * then stop serializing data. Disable with seqno_limit == -1.
- */
-void serialize_packet_data(char* buffer, size_t size, int seqno_limit, packet_list* list,
-		int* packets_written, int* last_packet_offset) {
-	char* buffer_iter = buffer;
-	int packet_count = 0;
-	int offset = 0;
-	while (list) {
-		if (list->packet) {
-			if (seqno_limit != -1 && ntohl(list->packet->seqno) >= seqno_limit) {
-				break;
-			}
-			uint16_t amountToCopy = ntohs(list->packet->len) - DATA_PACKET_METADATA_LENGTH;
-			size_t spaceLeft = size - (buffer_iter - buffer);
-			if (spaceLeft > 0 && spaceLeft < amountToCopy) {
-				amountToCopy = spaceLeft;
-				offset = amountToCopy;
-			}
-			else if (spaceLeft <= 0) {
-				break;
-			}
-			if (amountToCopy > 0) {
-				memcpy(buffer_iter, list->packet->data, amountToCopy);
-				buffer_iter += amountToCopy;
-			}
-		}
-		list = list->next;
-		packet_count++;
-	}
-	if (packets_written) {
-		*packets_written = packet_count;
-	}
-	if (last_packet_offset) {
-		*last_packet_offset = offset;
-	}
-}
-
 void print_packet_list(packet_list* list, int indent_level) {
 	char indents[indent_level + 1];
 	if (indent_level > 0) {

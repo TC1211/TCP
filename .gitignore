@@ -1,5 +1,8 @@
 # backup text files
 *~
+
+*reliable
+
 # Object files
 *.o
 *.ko
