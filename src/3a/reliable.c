@@ -266,6 +266,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
+	if (((int) n) != ntohs(pkt->len)) {
+		fprintf(stderr, "%d: Packet advertised size is not equal to real size\n", getpid());
+		return;
+	}
+
 	uint16_t packet_length = ntohs(pkt->len);
 	uint16_t stored_checksum = pkt->cksum;
 	pkt->cksum = 0;
@@ -277,7 +282,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	}
 	//if(ntohs(pkt->len) != (uint16_t) n)	return;
 	//printf("recv len: %u calc len:%u n:%u\n", ntohs(pkt->len), (uint16_t)check_pkt_data_len(pkt->data), (uint16_t)n);
-	
+
 	// Ack packet
 	if(packet_length == 8){
 		handle_ack(r, (struct ack_packet*) pkt);
