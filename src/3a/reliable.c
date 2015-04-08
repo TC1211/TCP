@@ -88,6 +88,7 @@ void print_rel_state(rel_t* rel, int indent_level) {
 	else {
 		indents[0] = 0;
 	}
+	fprintf(stderr, "%sPID: %d\n", indents, getpid());
 	fprintf(stderr, "%sNext seqno to send: %d\n", indents, rel->next_seqno_to_send);
 	fprintf(stderr, "%sFinal seqno: %d\n", indents, rel->final_seqno);
 	fprintf(stderr, "%sSend buffer:\n", indents);
@@ -270,7 +271,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	pkt->cksum = 0;
 	uint16_t computed_checksum = cksum(pkt, packet_length);
 	if (computed_checksum != stored_checksum) {
-		fprintf(stderr, "Checksum failed for packet of length %d\n", packet_length);
+		fprintf(stderr, "%d: Checksum failed for packet of length %d, ackno %d, seqno %d\n",
+				getpid(), packet_length, ntohl(pkt->ackno), ntohl(pkt->seqno));
 		return;
 	}
 	//if(ntohs(pkt->len) != (uint16_t) n)	return;
@@ -294,9 +296,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 		insert_packet_in_order(&(r->receive_buffer), to_insert);
 
-		int next_seqno_candidate = last_consecutive_sequence_number(r->receive_buffer) + 1;
-		if (next_seqno_candidate > r->next_seqno_expected) {
-			r->next_seqno_expected = next_seqno_candidate;
+		if (ntohl(pkt->seqno) == r->next_seqno_expected) {
+			r->next_seqno_expected++;
 		}
 
 		send_ack(r, r->next_seqno_expected);
@@ -417,7 +418,8 @@ void rel_output (rel_t *r) {
 			&& r->receive_buffer
 			&& r->receive_buffer->packet
 			&& !(handle_eof_packet(r))
-			&& r->receive_buffer->packet->data) {
+			&& r->receive_buffer->packet->data
+			&& ntohl(r->receive_buffer->packet->seqno) < r->next_seqno_expected) {
 		int to_write = ntohs(r->receive_buffer->packet->len)
 				- DATA_PACKET_METADATA_LENGTH
 				- r->receive_buffer_data_offset;
