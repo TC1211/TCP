@@ -17,7 +17,7 @@
 #include "packet_list.c"
 #include "constants.h"
 
-#undef DEBUG
+#define DEBUG
 
 // TODO:
 // - multiple connections
