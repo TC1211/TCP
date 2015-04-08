@@ -17,7 +17,7 @@
 #include "packet_list.c"
 #include "constants.h"
 
-#undef DEBUG
+#define DEBUG
 
 // TODO:
 // - multiple connections
@@ -267,6 +267,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "\n");
 #endif
     int possible_ackno = ntohl(pkt->ackno); //valid if not corrupt
+#ifdef DEBUG
+    fprintf(stderr, "possible_ackno: %d");
+#endif
 	if (((int) n) != ntohs(pkt->len)) {
 		fprintf(stderr, "%d:ackno:%d Packet advertised size is not equal to real size\n", getpid(), possible_ackno);
 		return;
