@@ -17,7 +17,7 @@
 #include "packet_list.c"
 #include "constants.h"
 
-#define DEBUG
+#undef DEBUG
 
 // TODO:
 // - multiple connections
@@ -270,8 +270,22 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		fprintf(stderr, "%d: Packet advertised size is not equal to real size\n", getpid());
 		return;
 	}
-
+	if ((int) n < 8
+			|| (int) n > MAX_PACKET_SIZE) {
+		fprintf(stderr, "%d: Real length is bad\n", getpid());
+		return;
+	}
+	if (ntohl(pkt->ackno) < 1
+			|| ntohl(pkt->ackno) > r->next_seqno_to_send) {
+		fprintf(stderr, "%d: Ackno %d doesn't make sense\n", getpid(), ntohl(pkt->ackno));
+		return;
+	}
 	uint16_t packet_length = ntohs(pkt->len);
+	if (packet_length < 8
+			|| packet_length > MAX_PACKET_SIZE) {
+		fprintf(stderr, "%d: Bad advertised packet length\n", getpid());
+		return;
+	}
 	uint16_t stored_checksum = pkt->cksum;
 	pkt->cksum = 0;
 	uint16_t computed_checksum = cksum(pkt, packet_length);
@@ -282,6 +296,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	}
 	//if(ntohs(pkt->len) != (uint16_t) n)	return;
 	//printf("recv len: %u calc len:%u n:%u\n", ntohs(pkt->len), (uint16_t)check_pkt_data_len(pkt->data), (uint16_t)n);
+
+
 
 	// Ack packet
 	if(packet_length == 8){
@@ -296,6 +312,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
 #endif
+		if (ntohl(pkt->seqno) < 1) {
+			fprintf(stderr, "%d: Seqno %d doesn't make sense\n", getpid(), ntohl(pkt->seqno));
+			return;
+		}
 		packet_list* to_insert = new_packet();
 		memcpy(to_insert->packet, pkt, packet_length);
 
