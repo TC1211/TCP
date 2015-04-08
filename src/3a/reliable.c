@@ -276,11 +276,15 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	//if(ntohs(pkt->len) != (uint16_t) n)	return;
 	//printf("recv len: %u calc len:%u n:%u\n", ntohs(pkt->len), (uint16_t)check_pkt_data_len(pkt->data), (uint16_t)n);
 	
-	if(packet_length == 8){ // Ack only
+	// Ack packet
+	if(packet_length == 8){
 		handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
-	else if (packet_length >= 12 && (ntohl(pkt->seqno) >= r->next_seqno_expected)){ //ack and data
+	// Data packet
+	else if (packet_length >= 12
+			&& packet_length <= MAX_PACKET_SIZE
+			&& ntohl(pkt->seqno) >= r->next_seqno_expected){
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
