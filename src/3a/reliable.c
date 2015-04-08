@@ -265,12 +265,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
-	int packet_length = ntohs(pkt->len);
-	//assert(packet_length == n);
-	// checksum
-	unsigned int check = pkt->cksum;
+	uint16_t packet_length = ntohs(pkt->len);
+	uint16_t stored_checksum = pkt->cksum;
 	pkt->cksum = 0;
-	if (cksum(pkt, packet_length)!=check) {
+	uint16_t computed_checksum = cksum(pkt, packet_length);
+	if (computed_checksum != stored_checksum) {
 		fprintf(stderr, "Checksum failed for packet of length %d\n", packet_length);
 		return;
 	}
