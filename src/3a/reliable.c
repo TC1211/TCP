@@ -298,9 +298,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		handle_ack(r, (struct ack_packet*) pkt);
 
 		if (packet_length == 12) {
-#ifdef DEBUG
+//#ifdef DEBUG
 			fprintf(stderr, "RECEIVE EOF PACKET\n");
-#endif
+//#endif
 			r->eof_other_side = 1;
 		}
 		rel_output(r);
@@ -337,7 +337,7 @@ rel_read (rel_t *s)
 			break;
 		}
 		if(bytes_read < 0){
-			should_break = 1;
+			should_break = 1; //need to send eof
 			s->eof_conn_input = 1;
 			s->final_seqno = s->next_seqno_to_send;
 			bytes_read = 0;
@@ -379,7 +379,7 @@ void rel_output (rel_t *r) {
 #endif
 	int check = conn_bufspace(r->c);
 	int total = packet_data_size(r->receive_buffer, r->next_seqno_expected);
-	if (check == 0 || total == 0) {
+	if (check == 0) {
 		fprintf(stderr, "Not enough space in output\n");
 		return;
 	}
@@ -394,7 +394,7 @@ void rel_output (rel_t *r) {
     if (size == 0) {
         fprintf(stderr, "SIZE IS ZERO\n");
     }
-
+    //may be accidentally sending EOF
 	conn_output(r->c, buf, (int) size);
 	if (last_packet_offset != 0) {
 		packets_written--;
