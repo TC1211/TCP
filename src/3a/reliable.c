@@ -17,7 +17,7 @@
 #include "packet_list.c"
 #include "constants.h"
 
-#undef DEBUG
+#define DEBUG
 
 // TODO:
 // - multiple connections
@@ -266,13 +266,17 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "-----------------------------------------------\n");
 	fprintf(stderr, "\n");
 #endif
+    int possible_ackno = ntohl(pkt->ackno); //valid if not corrupt
+#ifdef DEBUG
+    fprintf(stderr, "possible_ackno: %d \n", possible_ackno);
+#endif
 	if (((int) n) != ntohs(pkt->len)) {
-		fprintf(stderr, "%d: Packet advertised size is not equal to real size\n", getpid());
+		fprintf(stderr, "%d:ackno:%d Packet advertised size is not equal to real size\n", getpid(), possible_ackno);
 		return;
 	}
 	if ((int) n < 8
 			|| (int) n > MAX_PACKET_SIZE) {
-		fprintf(stderr, "%d: Real length is bad\n", getpid());
+		fprintf(stderr, "%d:ackno:%d Real length is bad\n", getpid(), possible_ackno);
 		return;
 	}
 	if (ntohl(pkt->ackno) < 1
@@ -283,9 +287,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	uint16_t packet_length = ntohs(pkt->len);
 	if (packet_length < 8
 			|| packet_length > MAX_PACKET_SIZE) {
-		fprintf(stderr, "%d: Bad advertised packet length\n", getpid());
+		fprintf(stderr, "%d:ackno:%d Bad advertised packet length\n", getpid(), possible_ackno);
 		return;
 	}
+    
 	uint16_t stored_checksum = pkt->cksum;
 	pkt->cksum = 0;
 	uint16_t computed_checksum = cksum(pkt, packet_length);
