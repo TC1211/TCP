@@ -338,16 +338,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
                 fprintf(stderr, "RECEIVE EOF PACKET\n");
                 //#endif
                 r->eof_other_side = 1;
-            } else {
-                send_ack(r, r->next_seqno_expected);
             }
             rel_output(r);
+        } else {
+            send_ack(r, r->next_seqno_expected);
         }
-//        else {
-//#ifdef DEBUG
-//            fprintf(stderr, "Packet ackno: %d seqno: %d and len: %d did not meet any condition! \n", possible_ackno, possible_seqno, packet_length);
-//#endif
-//        }
         
     }
 
