@@ -497,7 +497,7 @@ void resend_packets(rel_t *rel) {
 	while (packets_iter && packets_iter->packet) {
 
 #ifdef DEBUG
-		fprintf(stderr, "Resending packet: %d \n", ntohl(packets_iter->packet->seqno));
+		fprintf(stderr, "%d: Resending packet: %d \n", getpid(), ntohl(packets_iter->packet->seqno));
 #endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
@@ -508,6 +508,7 @@ void resend_packets(rel_t *rel) {
 void
 rel_timer ()
 {
+
 	/* Retransmit any packets that need to be retransmitted */
 	if (rel_list) {
 		resend_packets(rel_list);
