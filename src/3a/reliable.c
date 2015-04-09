@@ -305,7 +305,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 
 	// Ack packet
-	if(packet_length == 8 && r->eof_other_side == 0){
+	if(packet_length == 8){
         handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
@@ -330,8 +330,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			r->next_seqno_expected++;
 		}
 
-		send_ack(r, r->next_seqno_expected);
-		handle_ack(r, (struct ack_packet*) pkt);
+        if (r->eof_other_side == 0) {
+            send_ack(r, r->next_seqno_expected);
+        }
+        handle_ack(r, (struct ack_packet*) pkt);
 
 		if (packet_length == 12) {
 //#ifdef DEBUG
