@@ -77,6 +77,9 @@ struct reliable_state {
 	unsigned int num_packets_sent;
 	unsigned int num_packets_recvd;
 
+	unsigned int consec_acks;
+	unsigned int last_ack_recvd;
+
 };
 rel_t *rel_list;
 
@@ -154,6 +157,9 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	r->num_packets_sent = 0;
 	r->num_packets_recvd = 0;
 
+	r->consec_acks = 0;
+	r->last_ack_recvd = 0;
+
 	return r;
 }
 
@@ -193,6 +199,17 @@ void enforce_destroy(rel_t* rel) {
 int handle_ack(rel_t* rel, struct ack_packet* ack_packet) {
 	if (!rel) {
 		return -1;
+	}
+	int ackno = (int) ntohl(ack_packet->ackno);
+	if (ackno == rel->last_ack_recvd) {
+		rel->consec_acks++;
+		if (rel->consec_acks >= 4) {
+			rel->ssthresh = rel->congestion_window / 2;
+			rel->congestion_window = rel->ssthresh;
+		}
+	} else {
+		rel->last_ack_recvd = ackno;
+		rel->consec_acks = 0;
 	}
 #ifdef DEBUG
 	fprintf(stderr, "RECEIVE ACK %d\n", ntohl(ack_packet->ackno));
@@ -370,7 +387,7 @@ rel_read (rel_t *s)
 				|| s->eof_conn_input) {
 			return;
 		}
-		int window_size = s->config->window;
+//		int window_size = s->config->window;
 		int compare = s->receive_window - packet_list_size(s->receive_buffer);
 		int min = s->congestion_window < compare ? s->congestion_window : compare;
 		while (packet_list_size(s->send_buffer) < min) {
@@ -498,6 +515,12 @@ void resend_packets(rel_t *rel) {
 #endif
 */
 	packet_list* packets_iter = rel->send_buffer;
+	if (packets_iter && packets_iter->packet) {
+		//timeout
+		rel->ssthresh = 0.5 * rel->ssthresh;
+		rel->congestion_window = INITIAL_SEND_WINDOW;
+		
+	}
 	while (packets_iter && packets_iter->packet) {
 /*
 #ifdef DEBUG
