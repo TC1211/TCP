@@ -305,8 +305,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 
 	// Ack packet
-	if(packet_length == 8){
-		handle_ack(r, (struct ack_packet*) pkt);
+	if(packet_length == 8 && r->eof_other_side == 0){
+        handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
 	// Data packet
@@ -494,6 +494,11 @@ void resend_packets(rel_t *rel) {
 		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
 #endif
 */
+        
+#ifdef DEBUG
+        fprintf(stderr, "Se");
+        
+#endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
