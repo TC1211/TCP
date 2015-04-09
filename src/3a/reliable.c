@@ -342,7 +342,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			r->eof_other_side = 1;
 		}
 		rel_output(r);
-	}
+    } else {
+#ifdef DEBUG
+        fprintf(stderr, "Packet did not meet any condition!");
+#endif
+    }
 	//enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
@@ -497,10 +501,6 @@ void resend_packets(rel_t *rel) {
 #endif
 */
         
-#ifdef DEBUG
-        fprintf(stderr, "Se");
-        
-#endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
