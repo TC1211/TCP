@@ -495,12 +495,10 @@ void resend_packets(rel_t *rel) {
 */
 	packet_list* packets_iter = rel->send_buffer;
 	while (packets_iter && packets_iter->packet) {
-/*
+
 #ifdef DEBUG
-		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
+		fprintf(stderr, "Resending packet: \n", ntohl(packets_iter->packet->seqno));
 #endif
-*/
-        
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
