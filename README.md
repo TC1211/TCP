@@ -69,3 +69,10 @@ Calls conn\_output with a null pointer for the packet to be sent; sets the eof f
 ## Part B: Congestion Control
 ### Implementation of reliable.c
 #### rel_read
+We added functionality to check whether the host is a receiver or sender. If receiver, we added functionality to send an eof packet (we also added a check to make sure that the eof is not sent multiple times). 
+#### Other Changes
+We also changed all parts of the code where we construct packets to reflect the addition of the rwnd field to the packet struct in 3a. We also added more state to the rel\_t struct. We changed constants.h in 3b to reflect this change. In resend\_packets() we added code to detect when a timeout had occurred, which we do by checking whether the send buffer still has packets in it or not. We also added slow\_start\_check(), a method that checks whether slow start should be used and recomputes ssthresh and congestion window accordingly, and aimd(), which is called when slow start is not to be used, and which simply increments the congestion window by 1.
+## Resources Consulted
+StackOverflow
+Professor Benson and Boyang
+Various classmates on Piazza
