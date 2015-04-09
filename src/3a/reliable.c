@@ -344,7 +344,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		rel_output(r);
     } else {
 #ifdef DEBUG
-        fprintf(stderr, "Packet did not meet any condition!");
+        fprintf(stderr, "Packet ackno: %d and len: %d did not meet any condition! \n", possible_ackno, packet_length);
 #endif
     }
 	//enforce_destroy(r);
