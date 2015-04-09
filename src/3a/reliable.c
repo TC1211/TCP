@@ -267,8 +267,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	fprintf(stderr, "\n");
 #endif
     int possible_ackno = ntohl(pkt->ackno); //valid if not corrupt
+    int possible_seqno = ntohl(pkt->seqno);
 #ifdef DEBUG
-    fprintf(stderr, "possible_ackno: %d \n", possible_ackno);
+    fprintf(stderr, "ackno: %d seqno: %d \n", possible_ackno, possible_seqno);
 #endif
 	if (((int) n) != ntohs(pkt->len)) {
 		fprintf(stderr, "%d:ackno:%d Packet advertised size is not equal to real size\n", getpid(), possible_ackno);
@@ -344,7 +345,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		rel_output(r);
     } else {
 #ifdef DEBUG
-        fprintf(stderr, "Packet ackno: %d and len: %d did not meet any condition! \n", possible_ackno, packet_length);
+        fprintf(stderr, "Packet ackno: %d seqno: %d and len: %d did not meet any condition! \n", possible_ackno, possible_seqno, packet_length);
 #endif
     }
 	//enforce_destroy(r);
@@ -497,7 +498,7 @@ void resend_packets(rel_t *rel) {
 	while (packets_iter && packets_iter->packet) {
 
 #ifdef DEBUG
-		fprintf(stderr, "%d: Resending packet: %d \n", getpid(), ntohl(packets_iter->packet->seqno));
+		fprintf(stderr, "%d: Resending packet, ackno: %d seqno: %d \n", getpid(), ntohl(packets_iter->packet->ackno) ,ntohl(packets_iter->packet->seqno));
 #endif
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
