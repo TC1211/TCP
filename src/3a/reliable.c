@@ -310,9 +310,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	}
 	// Data packet
     else {
-        if (r->eof_other_side == 0) {
-            send_ack(r, r->next_seqno_expected);
-        }
         if (packet_length >= 12
             && packet_length <= MAX_PACKET_SIZE
             && ntohl(pkt->seqno) >= r->next_seqno_expected){
@@ -333,6 +330,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
                 r->next_seqno_expected++;
             }
             
+            send_ack(r, r->next_seqno_expected);
             handle_ack(r, (struct ack_packet*) pkt);
             
             if (packet_length == 12) {
@@ -343,9 +341,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
             }
             rel_output(r);
         } else {
-#ifdef DEBUG
-            fprintf(stderr, "Packet ackno: %d seqno: %d and len: %d did not meet any condition! \n", possible_ackno, possible_seqno, packet_length);
-#endif
+            send_ack(r, r->next_seqno_expected);
         }
         
     }

@@ -2,10 +2,10 @@
 Custom TCP implementation
 
 ## Group Members
-- Francesco Agosti
-- Grace Chen
-- TC Dong
-- Michael Ren
+- Francesco Agosti (fra5)
+- Grace Chen (gsc9)
+- TC Dong (td84)
+- Michael Ren (mjr37)
 
 ## File Layout
 - src/: Source files
