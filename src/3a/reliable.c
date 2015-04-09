@@ -303,51 +303,53 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	//if(ntohs(pkt->len) != (uint16_t) n)	return;
 	//printf("recv len: %u calc len:%u n:%u\n", ntohs(pkt->len), (uint16_t)check_pkt_data_len(pkt->data), (uint16_t)n);
 
-
-
 	// Ack packet
 	if(packet_length == 8){
         handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
 	// Data packet
-	else if (packet_length >= 12
-			&& packet_length <= MAX_PACKET_SIZE
-			&& ntohl(pkt->seqno) >= r->next_seqno_expected){
-		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
-#ifdef DEBUG
-		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
-#endif
-		if (ntohl(pkt->seqno) < 1) {
-			fprintf(stderr, "%d: Seqno %d doesn't make sense\n", getpid(), ntohl(pkt->seqno));
-			return;
-		}
-		packet_list* to_insert = new_packet();
-		memcpy(to_insert->packet, pkt, packet_length);
-
-		insert_packet_in_order(&(r->receive_buffer), to_insert);
-
-		if (ntohl(pkt->seqno) == r->next_seqno_expected) {
-			r->next_seqno_expected++;
-		}
-
+    else {
         if (r->eof_other_side == 0) {
             send_ack(r, r->next_seqno_expected);
         }
-        handle_ack(r, (struct ack_packet*) pkt);
-
-		if (packet_length == 12) {
-//#ifdef DEBUG
-			fprintf(stderr, "RECEIVE EOF PACKET\n");
-//#endif
-			r->eof_other_side = 1;
-		}
-		rel_output(r);
-    } else {
+        if (packet_length >= 12
+            && packet_length <= MAX_PACKET_SIZE
+            && ntohl(pkt->seqno) >= r->next_seqno_expected){
+            //if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
 #ifdef DEBUG
-        fprintf(stderr, "Packet ackno: %d seqno: %d and len: %d did not meet any condition! \n", possible_ackno, possible_seqno, packet_length);
+            fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
 #endif
+            if (ntohl(pkt->seqno) < 1) {
+                fprintf(stderr, "%d: Seqno %d doesn't make sense\n", getpid(), ntohl(pkt->seqno));
+                return;
+            }
+            packet_list* to_insert = new_packet();
+            memcpy(to_insert->packet, pkt, packet_length);
+            
+            insert_packet_in_order(&(r->receive_buffer), to_insert);
+            
+            if (ntohl(pkt->seqno) == r->next_seqno_expected) {
+                r->next_seqno_expected++;
+            }
+            
+            handle_ack(r, (struct ack_packet*) pkt);
+            
+            if (packet_length == 12) {
+                //#ifdef DEBUG
+                fprintf(stderr, "RECEIVE EOF PACKET\n");
+                //#endif
+                r->eof_other_side = 1;
+            }
+            rel_output(r);
+        } else {
+#ifdef DEBUG
+            fprintf(stderr, "Packet ackno: %d seqno: %d and len: %d did not meet any condition! \n", possible_ackno, possible_seqno, packet_length);
+#endif
+        }
+        
     }
+
 	//enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
