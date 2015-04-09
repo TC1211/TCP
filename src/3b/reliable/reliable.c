@@ -79,6 +79,8 @@ struct reliable_state {
 
 	unsigned int consec_acks;
 	unsigned int last_ack_recvd;
+	
+	long start, finish;
 
 };
 rel_t *rel_list;
@@ -159,6 +161,12 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
 	r->consec_acks = 0;
 	r->last_ack_recvd = 0;
+	
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	r->start = tv.tv_usec / 1000;
+	fprintf(stderr, "Start time: \t%03ld\n", r->start);
+	r->finish = 0;
 
 	return r;
 }
@@ -175,6 +183,13 @@ rel_destroy (rel_t *r)
 	while (r->receive_buffer) {
 		remove_head_packet(&(r->receive_buffer));
 	}
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	r->finish = tv.tv_usec / 1000;
+	fprintf(stderr, "Finish time: \t%03ld\n", r->finish);
+	fprintf(stderr, "Total time: \t%03ld\n", r->finish - r->start);
+	return;
+
 }
 
 
@@ -296,6 +311,13 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			&& packet_length <= MAX_PACKET_SIZE
 			&& ntohl(pkt->seqno) >= r->next_seqno_expected){
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
+		
+		if (r->start == 0) {
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			r->start = tv.tv_usec / 1000;
+			fprintf(stderr, "Start time: \t%03ld\n", r->start);
+		}
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
 #endif
