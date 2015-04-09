@@ -310,7 +310,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	}
 	// Data packet
     else {
-        if (r->eof_other_side == 0) {
+        if (packet_length >= 12
+            && packet_length <= MAX_PACKET_SIZE && r->eof_other_side == 0) {
             send_ack(r, r->next_seqno_expected);
         }
         if (packet_length >= 12
