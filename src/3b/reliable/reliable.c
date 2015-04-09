@@ -319,7 +319,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	// Data packet
 	else if (packet_length >= DATA_PACKET_METADATA_LENGTH
 			&& packet_length <= MAX_PACKET_SIZE
-			&& ntohl(pkt->seqno) >= r->next_seqno_expected){
+			&& ntohl(pkt->seqno) >= r->next_seqno_expected
+			&& packet_list_size(r->receive_buffer) < r->receive_window){
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
