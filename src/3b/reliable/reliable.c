@@ -13,6 +13,7 @@
 #include <sys/uio.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #include "rlib.h"
 #include "packet_list.c"
@@ -67,6 +68,14 @@ struct reliable_state {
 	uint8_t eof_conn_input;
 	uint8_t eof_all_acked;
 	uint8_t eof_conn_output;
+
+	unsigned int ssthresh;
+	unsigned int congestion_window;
+	unsigned int receive_window;
+
+	unsigned int window_timer;
+	unsigned int num_packets_sent;
+	unsigned int num_packets_recvd;
 
 };
 rel_t *rel_list;
@@ -138,6 +147,13 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	r->eof_all_acked = 0;
 	r->eof_conn_output = 0;
 
+	r->ssthresh = INT_MAX;
+	r->congestion_window = INITIAL_SEND_WINDOW;
+	r->receive_window = r->config->window;
+	r->window_timer = 0;
+	r->num_packets_sent = 0;
+	r->num_packets_recvd = 0;
+
 	return r;
 }
 
@@ -204,11 +220,9 @@ void send_ack(rel_t *r, uint32_t ackno) {
 	memset(ack, 0, ack_packet_size);
 	ack->len = htons(ack_packet_size);
 	ack->ackno = htonl(ackno);
+	ack->rwnd = htonl(r->receive_window - packet_list_size(r->receive_buffer));
 	ack->cksum = cksum((void *)ack, ack_packet_size);
 	conn_sendpkt(r->c, (packet_t *)ack, ack_packet_size);
-	//assert(sent == 8);
-	//assert(ntohs(ack->len) == 8);
-	//assert(ntohl(ack->ackno) == ackno);
 	free(ack);
 	return;
 }
@@ -226,7 +240,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		fprintf(stderr, "%d: Packet advertised size is not equal to real size\n", getpid());
 		return;
 	}
-	if ((int) n < 8
+	if ((int) n < ACK_PACKET_LENGTH
 			|| (int) n > MAX_PACKET_SIZE) {
 		fprintf(stderr, "%d: Real length is bad\n", getpid());
 		return;
@@ -237,7 +251,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		return;
 	}
 	uint16_t packet_length = ntohs(pkt->len);
-	if (packet_length < 8
+	if (packet_length < ACK_PACKET_LENGTH
 			|| packet_length > MAX_PACKET_SIZE) {
 		fprintf(stderr, "%d: Bad advertised packet length\n", getpid());
 		return;
@@ -256,12 +270,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 
 	// Ack packet
-	if(packet_length == 8){
+	if(packet_length == ACK_PACKET_LENGTH){
 		handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
 	// Data packet
-	else if (packet_length >= 12
+	else if (packet_length >= DATA_PACKET_METADATA_LENGTH
 			&& packet_length <= MAX_PACKET_SIZE
 			&& ntohl(pkt->seqno) >= r->next_seqno_expected){
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
@@ -284,12 +298,13 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		send_ack(r, r->next_seqno_expected);
 		handle_ack(r, (struct ack_packet*) pkt);
 
-		if (packet_length == 12) {
+		if (packet_length == DATA_PACKET_METADATA_LENGTH) {
 //#ifdef DEBUG
 			fprintf(stderr, "RECEIVE EOF PACKET\n");
 //#endif
 			r->eof_other_side = 1;
 		}
+		r->num_packets_recvd++;
 		rel_output(r);
 	}
 	//enforce_destroy(r);
@@ -302,16 +317,45 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 	return;
 }
 
+void aimd(rel_t *r) {
+	r->congestion_window++;
+}
+
+void slow_start_check(rel_t *r) {
+	if ((2 * r->congestion_window) < r->ssthresh) {
+		r->congestion_window = 2 * (r->congestion_window) * (r->num_packets_recvd) / (r->num_packets_sent);
+	} else {
+		aimd(r);
+	}
+}
 
 void
 rel_read (rel_t *s)
 {
 	if(s->c->sender_receiver == RECEIVER)
 	{
-		//if already sent EOF to the sender
-		//  return;
-		//else
-		//  send EOF to the sender
+		if (s->eof_conn_input) {
+			return;
+		} else {
+			s->eof_conn_input = 1;
+			s->final_seqno = s->next_seqno_to_send;
+			packet_list *eof = new_packet();
+			memset(eof, 0, sizeof(packet_list));
+			
+			int packet_length = DATA_PACKET_METADATA_LENGTH;
+			eof->packet->len = htons(packet_length);
+			eof->packet->ackno = htonl(s->next_seqno_expected);
+			eof->packet->seqno = htonl(s->next_seqno_to_send);
+			eof->packet->rwnd = htonl(s->receive_window - packet_list_size(s->receive_buffer));
+			uint16_t checksum = cksum(eof->packet, packet_length);
+			eof->packet->cksum = checksum;
+			s->next_seqno_to_send++;
+
+			conn_sendpkt(s->c, eof->packet, packet_length);
+			append_packet(&(s->send_buffer), eof);
+			s->num_packets_sent++;
+			return;
+		}
 	}
 	else //run in the sender mode
 	{
@@ -327,7 +371,9 @@ rel_read (rel_t *s)
 			return;
 		}
 		int window_size = s->config->window;
-		while (packet_list_size(s->send_buffer) < window_size) {
+		int compare = s->receive_window - packet_list_size(s->receive_buffer);
+		int min = s->congestion_window < compare ? s->congestion_window : compare;
+		while (packet_list_size(s->send_buffer) < min) {
 			int should_break = 0;
 			packet_list* packet_node = new_packet();
 			int bytes_read = conn_input(s->c, packet_node->packet->data, MAX_PACKET_DATA_SIZE);
@@ -345,13 +391,14 @@ rel_read (rel_t *s)
 			packet_node->packet->len = htons(packet_length);
 			packet_node->packet->ackno = htonl(s->next_seqno_expected);
 			packet_node->packet->seqno = htonl(s->next_seqno_to_send);
+			packet_node->packet->rwnd = htonl(s->receive_window - packet_list_size(s->receive_buffer));
 			uint16_t checksum = cksum(packet_node->packet, packet_length);
 			packet_node->packet->cksum = checksum;
 			s->next_seqno_to_send++;
 
 			conn_sendpkt(s->c, packet_node->packet, packet_length);
 			append_packet(&(s->send_buffer), packet_node);
-
+			s->num_packets_sent++;
 			if (should_break) {
 				break;
 			}
@@ -371,7 +418,7 @@ bool is_eof_packet(packet_t* packet) {
 	if (!packet) {
 		return false;
 	}
-	if (ntohs(packet->len) == 12) {
+	if (ntohs(packet->len) == DATA_PACKET_METADATA_LENGTH) {
 		return true;
 	}
 	return false;
@@ -469,6 +516,13 @@ rel_timer ()
 	/* Retransmit any packets that need to be retransmitted */
 	if (rel_list) {
 		resend_packets(rel_list);
+		rel_list->window_timer += rel_list->config->timer;
+		if (rel_list->window_timer >= rel_list->config->timeout) {
+			slow_start_check(rel_list);
+			rel_list->window_timer = 0;
+			rel_list->num_packets_sent = 0;
+			rel_list->num_packets_recvd = 0;
+		}
 	}
 	/*
 	rel_t *rel_list_fwd = rel_list;

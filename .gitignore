@@ -2,7 +2,7 @@
 *~
 
 *reliable
-
+!*reliable/
 # Object files
 *.o
 *.ko
