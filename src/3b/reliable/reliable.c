@@ -158,10 +158,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	r->consec_acks = 0;
 	r->last_ack_recvd = 0;
 	
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	r->start = tv.tv_usec / 1000;
-	fprintf(stderr, "Start time: \t%03ld\n", r->start);
+	r->start = 0;
 	r->finish = 0;
 
 	return r;
@@ -181,9 +178,9 @@ rel_destroy (rel_t *r)
 	}
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	r->finish = tv.tv_usec / 1000;
-	fprintf(stderr, "Finish time: \t%03ld\n", r->finish);
-	fprintf(stderr, "Total time: \t%03ld\n", r->finish - r->start);
+	r->finish = tv.tv_sec * 1000;
+	fprintf(stderr, "Finish time: \t%ld\n", r->finish);
+	fprintf(stderr, "Total time: \t%ld\n", r->finish - r->start);
 	return;
 
 }
@@ -226,6 +223,7 @@ int handle_ack(rel_t* rel, struct ack_packet* ack_packet) {
 	if (!rel) {
 		return -1;
 	}
+	int destroy = 0;
 	int ackno = (int) ntohl(ack_packet->ackno);
 	bool duplicate_acks = handle_duplicate_acks(rel, ackno);
 
@@ -234,6 +232,7 @@ int handle_ack(rel_t* rel, struct ack_packet* ack_packet) {
 #endif
 	if (ntohl(ack_packet->ackno) > rel->final_seqno) {
 		rel->eof_all_acked = 1;
+		destroy = 1;
 #ifdef DEBUG
 	fprintf(stderr, "All sent are acked\n");
 #endif
@@ -249,6 +248,13 @@ int handle_ack(rel_t* rel, struct ack_packet* ack_packet) {
 	}
 	if (!duplicate_acks && updated && !is_slow_start(rel)) {
 		(rel->congestion_window)++;
+	}
+	if (destroy) {
+/*		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		rel->finish = tv.tv_sec;
+		fprintf(stderr, "Finish time: \t%ld\n", rel->finish);*/
+		rel_destroy(rel);
 	}
 	//assert(ntohl(rel->send_buffer->packet->seqno) >= ntohl(ack_packet->ackno));
 	return 0;
@@ -341,8 +347,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		if (r->start == 0) {
 			struct timeval tv;
 			gettimeofday(&tv, NULL);
-			r->start = tv.tv_usec / 1000;
-			fprintf(stderr, "Start time: \t%03ld\n", r->start);
+			r->start = tv.tv_sec * 1000;
+			fprintf(stderr, "Start time: \t%ld\n", r->start);
 		}
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
@@ -384,6 +390,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 void
 rel_read (rel_t *s)
 {
+	if (s->start == 0) {
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		s->start = tv.tv_sec * 1000;
+		fprintf(stderr, "Start time: \t%ld\n", s->start);
+	}
 	if(s->c->sender_receiver == RECEIVER)
 	{
 		if (s->eof_conn_input) {
@@ -483,6 +495,10 @@ bool handle_eof_packet(rel_t* rel) {
 	if (is_eof_packet(rel->receive_buffer->packet)) {
 		conn_output(rel->c, NULL, 0);
 		rel->eof_conn_output = 1;
+		if (rel->c->sender_receiver == RECEIVER) {
+			rel_destroy(rel);
+			return true;
+		}
 		enforce_destroy(rel);
 		return true;
 	}
