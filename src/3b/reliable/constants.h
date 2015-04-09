@@ -1,0 +1,11 @@
+//
+//  constants.h, part 3b
+//  TCP2
+//
+
+
+#define MAX_PACKET_SIZE 1016
+#define DATA_PACKET_METADATA_LENGTH 16
+#define ACK_PACKET_LENGTH 12
+#define MAX_PACKET_DATA_SIZE 1000
+#define INITIAL_SEND_WINDOW 3
