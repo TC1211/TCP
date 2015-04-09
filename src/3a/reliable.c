@@ -306,7 +306,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
 	// Ack packet
 	if(packet_length == 8){
-		handle_ack(r, (struct ack_packet*) pkt);
+        handle_ack(r, (struct ack_packet*) pkt);
 		rel_read(r);
 	}
 	// Data packet
@@ -330,8 +330,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			r->next_seqno_expected++;
 		}
 
-		send_ack(r, r->next_seqno_expected);
-		handle_ack(r, (struct ack_packet*) pkt);
+        if (r->eof_other_side == 0) {
+            send_ack(r, r->next_seqno_expected);
+        }
+        handle_ack(r, (struct ack_packet*) pkt);
 
 		if (packet_length == 12) {
 //#ifdef DEBUG
@@ -340,7 +342,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			r->eof_other_side = 1;
 		}
 		rel_output(r);
-	}
+    } else {
+#ifdef DEBUG
+        fprintf(stderr, "Packet ackno: %d and len: %d did not meet any condition! \n", possible_ackno, packet_length);
+#endif
+    }
 	//enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
@@ -489,11 +495,10 @@ void resend_packets(rel_t *rel) {
 */
 	packet_list* packets_iter = rel->send_buffer;
 	while (packets_iter && packets_iter->packet) {
-/*
+
 #ifdef DEBUG
-		fprintf(stderr, "\n--- Resending packet %d ---\n", ntohl(packets_iter->packet->seqno));
+		fprintf(stderr, "%d: Resending packet: %d \n", getpid(), ntohl(packets_iter->packet->seqno));
 #endif
-*/
 		conn_sendpkt(rel->c, packets_iter->packet, ntohs(packets_iter->packet->len));
 		packets_iter = packets_iter->next;
 	}
@@ -503,6 +508,7 @@ void resend_packets(rel_t *rel) {
 void
 rel_timer ()
 {
+
 	/* Retransmit any packets that need to be retransmitted */
 	if (rel_list) {
 		resend_packets(rel_list);
