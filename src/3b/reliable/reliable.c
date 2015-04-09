@@ -178,9 +178,11 @@ rel_destroy (rel_t *r)
 	}
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	r->finish = tv.tv_sec;
+	r->finish = tv.tv_usec / 1000.0;
 	//fprintf(stderr, "Finish time: \t%ld\n", r->finish);
-	fprintf(stderr, "Total time: \t%f\n", 1000.0 * (r->finish - r->start));
+	fprintf(stderr, "Total time: \t%ld\n", (r->finish - r->start));
+/*	ftime(&r->start);
+	int t_diff = (int) (1000.0 * (r->finish - r->start) + (r->finish.millitm - r->start.millitm));*/
 	return;
 
 }
@@ -347,8 +349,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		if (r->start == 0) {
 			struct timeval tv;
 			gettimeofday(&tv, NULL);
-			r->start = tv.tv_sec;
+			r->start = tv.tv_usec / 1000.0;
 			//fprintf(stderr, "Start time: \t%ld\n", r->start * 1000.0);
+//			ftime(&r->start);
 		}
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
@@ -393,8 +396,9 @@ rel_read (rel_t *s)
 	if (s->start == 0) {
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		s->start = tv.tv_sec;
+		s->start = tv.tv_usec / 1000.0;
 		//fprintf(stderr, "Start time: \t%ld\n", 1000 * s->start);
+//		ftime(&s->start);
 	}
 	if(s->c->sender_receiver == RECEIVER)
 	{
