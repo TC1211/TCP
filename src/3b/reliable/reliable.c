@@ -76,8 +76,8 @@ struct reliable_state {
 	unsigned int consec_acks;
 	unsigned int last_ack_recvd;
 	
-	long start, finish;
-
+	struct timeval start;
+	struct timeval finish;
 };
 rel_t *rel_list;
 
@@ -158,8 +158,10 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	r->consec_acks = 0;
 	r->last_ack_recvd = 0;
 	
-	r->start = 0;
-	r->finish = 0;
+	r->start.tv_sec = 0;
+	r->start.tv_usec = 0;
+	r->finish.tv_sec = 0;
+	r->finish.tv_usec = 0;
 
 	return r;
 }
@@ -176,11 +178,13 @@ rel_destroy (rel_t *r)
 	while (r->receive_buffer) {
 		remove_head_packet(&(r->receive_buffer));
 	}
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	r->finish = tv.tv_sec;
-	//fprintf(stderr, "Finish time: \t%ld\n", r->finish);
-	fprintf(stderr, "Total time: \t%f\n", 1000.0 * (r->finish - r->start));
+	gettimeofday(&r->finish, NULL);
+	long int milliseconds_start = (r->start.tv_sec * 1000)
+			+ (r->start.tv_usec / 1000);
+	long int milliseconds_finish = (r->finish.tv_sec * 1000)
+			+ (r->finish.tv_usec / 1000);
+
+	fprintf(stderr, "Total time: \t%ld ms\n", milliseconds_finish - milliseconds_start);
 	return;
 
 }
@@ -344,11 +348,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 			&& packet_list_size(r->receive_buffer) < r->receive_window){
 		//if (ntohs(pkt->len)-12 != check_pkt_data_len(pkt->data))	return;
 		
-		if (r->start == 0) {
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
-			r->start = tv.tv_sec;
-			//fprintf(stderr, "Start time: \t%ld\n", r->start * 1000.0);
+		if (!r->start.tv_sec && !r->start.tv_usec) {
+			gettimeofday(&r->start, NULL);
 		}
 #ifdef DEBUG
 		fprintf(stderr, "INSERTING %d\n", ntohl(pkt->seqno));
@@ -377,6 +378,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 		}
 		rel_output(r);
 	}
+	else {
+		send_ack(r, r->next_seqno_expected);
+	}
 	//enforce_destroy(r);
 #ifdef DEBUG
 	fprintf(stderr, "--- End recvpkt -------------------------------\n");
@@ -390,11 +394,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 void
 rel_read (rel_t *s)
 {
-	if (s->start == 0) {
-		struct timeval tv;
-		gettimeofday(&tv, NULL);
-		s->start = tv.tv_sec;
-		//fprintf(stderr, "Start time: \t%ld\n", 1000 * s->start);
+	if (!s->start.tv_sec && !s->start.tv_usec) {
+		gettimeofday(&s->start, NULL);
 	}
 	if(s->c->sender_receiver == RECEIVER)
 	{
